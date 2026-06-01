@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+:root {
+  --background: #1a1410;
+  --foreground: #f5f0e8;
+  --mansion: #2d2318;
+  --mansion-dark: #1a1410;
+  --mansion-card: #3d2e22;
+  --burgundy: #722f37;
+  --burgundy-light: #8b3a44;
+  --gold: #c9a227;
+  --gold-light: #dbb84a;
+  --cream: #f5f0e8;
+  --forest: #2d6a4f;
+  --forest-light: #40916c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-mansion: var(--mansion);
+  --color-mansion-dark: var(--mansion-dark);
+  --color-mansion-card: var(--mansion-card);
+  --color-burgundy: var(--burgundy);
+  --color-burgundy-light: var(--burgundy-light);
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-cream: var(--cream);
+  --color-forest: var(--forest);
+  --color-forest-light: var(--forest-light);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-playfair);
+}
+
+body {
+  background: var(--mansion-dark);
+  color: var(--cream);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-serif {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+/* Safe area for mobile bottom tabs */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Subtle page enter animation */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s ease-out;
+}
+
+/* Gold pulse for valid moves */
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.15); }
+}
+
+/* Card hover lift */
+.card-interactive {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Focus visible for accessibility */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--mansion-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--burgundy);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}

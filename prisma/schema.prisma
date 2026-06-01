@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  isGuest       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  players  Player[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model GameLobby {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  hostId    String
+  status    String   @default("waiting")
+  maxPlayers Int     @default(6)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session GameSession?
+}
+
+model GameSession {
+  id        String   @id @default(cuid())
+  lobbyId   String   @unique
+  status    String   @default("playing")
+  solution  Json
+  boardState Json
+  turnIndex Int      @default(0)
+  phase     String   @default("roll")
+  winnerId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lobby       GameLobby    @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  players     Player[]
+  moveHistory MoveHistory[]
+  chatMessages ChatMessage[]
+}
+
+model Player {
+  id              String   @id @default(cuid())
+  userId          String
+  sessionId       String
+  displayName     String
+  color           String
+  position        Json
+  currentRoom     String?
+  hand            Json     @default("[]")
+  canAccuse       Boolean  @default(true)
+  isEliminated    Boolean  @default(false)
+  turnOrder       Int
+  socketId        String?
+  isConnected     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  user    User        @relation(fields: [userId], references: [id])
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+model MoveHistory {
+  id        String   @id @default(cuid())
+  sessionId String
+  playerId  String
+  action    String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  playerId  String
+  message   String
+  createdAt DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
