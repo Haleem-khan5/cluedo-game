@@ -16,6 +16,8 @@ export interface WaitingLobbyPlayer {
   tokenColorId: string;
   /** True when this player created the lobby. */
   isHost: boolean;
+  /** AI detective — plays automatically. */
+  isBot?: boolean;
 }
 
 /** Full lobby snapshot broadcast over Socket.IO (`lobby:update`). */
@@ -59,6 +61,12 @@ export type LiveGameClientState = GameState & {
 /** Deduction mark on the detective notes sheet. */
 export type DetectiveNoteMark = "unknown" | "maybe" | "ruled-out" | "confirmed";
 
+/** Per-player grid cell mark — cycles on click. */
+export type GridCellMark = "empty" | "yes" | "no" | "maybe" | "has";
+
+/** Key: `${playerUserId}::${cardName}` */
+export type PlayerGridMarks = Record<string, GridCellMark>;
+
 /** Maps card name → note mark (empty = unknown). */
 export type DetectiveNotesSheet = Record<string, DetectiveNoteMark>;
 
@@ -78,6 +86,7 @@ export interface ServerLobbyPayload {
     displayName: string;
     color: string;
     isHost: boolean;
+    isBot?: boolean;
   }[];
 }
 
@@ -92,6 +101,7 @@ export function mapServerLobbyToSnapshot(payload: ServerLobbyPayload): WaitingLo
       displayName: player.displayName,
       tokenColorId: player.color,
       isHost: player.isHost,
+      isBot: player.isBot,
     })),
   };
 }
@@ -107,6 +117,7 @@ export function mapSnapshotToServerLobby(snapshot: WaitingLobbySnapshot): Server
       displayName: player.displayName,
       color: player.tokenColorId,
       isHost: player.isHost,
+      isBot: player.isBot,
     })),
   };
 }

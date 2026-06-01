@@ -63,19 +63,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const name = (credentials?.name as string)?.trim() || "Guest Detective";
         const guestId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-        const user = await prisma.user.create({
-          data: {
-            name,
-            email: `${guestId}@guest.mysterymansion.local`,
-            isGuest: true,
-          },
-        });
+        try {
+          const user = await prisma.user.create({
+            data: {
+              name,
+              email: `${guestId}@guest.mysterymansion.local`,
+              isGuest: true,
+            },
+          });
 
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-        };
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+          };
+        } catch (err) {
+          console.error("[auth/guest] Failed to create guest user:", err);
+          return null;
+        }
       },
     }),
   ],

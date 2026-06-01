@@ -3,13 +3,10 @@ import {
   createSolution,
   dealCards,
   initializeGame,
-  rollDice,
-  movePlayer,
-  makeSuggestion,
+  makeInterrogation,
   disproveSuggestion,
   passDisprove,
   makeAccusation,
-  endTurn,
   getMatchingCards,
   validatePlayerCount,
 } from "@/lib/game/engine";
@@ -51,7 +48,7 @@ describe("Game Engine", () => {
     });
   });
 
-  describe("game flow", () => {
+  describe("turn-based flow", () => {
     const solution = {
       suspect: "Professor Gray" as const,
       weapon: "Silver Dagger" as const,
@@ -64,27 +61,25 @@ describe("Game Engine", () => {
       { id: "p3", userId: "u3", displayName: "Carol", color: "green", canAccuse: true, isEliminated: false, turnOrder: 2, isConnected: true },
     ];
 
-    it("initializes game with dealt hands", () => {
+    it("initializes game in turn phase", () => {
       const { state } = initializeGame("session1", "ABC123", players, solution);
       expect(state.players).toHaveLength(3);
       expect(state.players.every((p) => p.hand.length > 0)).toBe(true);
-      expect(state.phase).toBe("roll");
+      expect(state.phase).toBe("turn");
     });
 
-    it("rolls dice and transitions to move phase", () => {
+    it("interrogation moves to disprove phase", () => {
       const { state } = initializeGame("session1", "ABC123", players, solution);
-      const result = rollDice(state);
+      const result = makeInterrogation(state, "p1", "Lady Violet", "Poison Bottle", "Kitchen");
       expect(result.error).toBeUndefined();
-      expect(result.state.diceRoll).toBeGreaterThanOrEqual(1);
-      expect(result.state.diceRoll).toBeLessThanOrEqual(6);
-      expect(result.state.phase).toBe("move");
+      expect(result.state.phase).toBe("disprove");
+      expect(result.state.pendingSuggestion?.suspect).toBe("Lady Violet");
     });
 
     it("correct accusation wins the game", () => {
       const { state } = initializeGame("session1", "ABC123", players, solution);
-      const rolled = rollDice(state).state;
       const accused = makeAccusation(
-        { ...rolled, phase: "accuse" },
+        state,
         "p1",
         solution.suspect,
         solution.weapon,
@@ -95,10 +90,10 @@ describe("Game Engine", () => {
       expect(accused.state.winnerId).toBe("p1");
     });
 
-    it("wrong accusation eliminates player", () => {
+    it("wrong accusation eliminates player and advances turn", () => {
       const { state } = initializeGame("session1", "ABC123", players, solution);
       const accused = makeAccusation(
-        { ...state, phase: "accuse" },
+        state,
         "p1",
         "Lady Violet",
         "Poison Bottle",
@@ -107,6 +102,8 @@ describe("Game Engine", () => {
       );
       expect(accused.state.players[0].canAccuse).toBe(false);
       expect(accused.state.players[0].isEliminated).toBe(true);
+      expect(accused.state.turnIndex).toBe(1);
+      expect(accused.state.phase).toBe("turn");
     });
   });
 

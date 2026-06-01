@@ -4,6 +4,8 @@ import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { AppShell } from "@/components/layout/AppShell";
+import { SidebarProvider } from "@/components/layout/SidebarContext";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 
 const geistSans = Geist({
@@ -44,14 +46,20 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-mansion-dark text-cream">
+      <body
+        suppressHydrationWarning
+        className="min-h-full flex flex-col bg-mansion-dark text-cream"
+      >
         <AuthProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-          <ToastContainer />
+          <SidebarProvider>
+            <Header />
+            <AppShell>{children}</AppShell>
+            <Footer />
+            <ToastContainer />
+          </SidebarProvider>
         </AuthProvider>
       </body>
     </html>

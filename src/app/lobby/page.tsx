@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  Castle,
   KeyRound,
   PlusCircle,
   Users,
@@ -15,6 +14,8 @@ import {
   ArrowLeft,
   Loader2,
   BookOpen,
+  Bot,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -89,6 +90,35 @@ export default function GameLobbyPage() {
     if (!result.success) setLobbyErrorMessage(result.error ?? "Lobby not found");
   };
 
+  const addBotToLobby = async () => {
+    if (!authenticatedUserId || !waitingLobbySnapshot) return;
+    setIsLobbyActionLoading(true);
+    setLobbyErrorMessage("");
+
+    const result = await emit<{ success: boolean; error?: string }>("lobby:addBot", {
+      code: waitingLobbySnapshot.lobbyInviteCode,
+      userId: authenticatedUserId,
+    });
+
+    setIsLobbyActionLoading(false);
+    if (!result.success) setLobbyErrorMessage(result.error ?? "Failed to add bot");
+  };
+
+  const removeBotFromLobby = async (botUserId: string) => {
+    if (!authenticatedUserId || !waitingLobbySnapshot) return;
+    setIsLobbyActionLoading(true);
+    setLobbyErrorMessage("");
+
+    const result = await emit<{ success: boolean; error?: string }>("lobby:removeBot", {
+      code: waitingLobbySnapshot.lobbyInviteCode,
+      userId: authenticatedUserId,
+      botUserId,
+    });
+
+    setIsLobbyActionLoading(false);
+    if (!result.success) setLobbyErrorMessage(result.error ?? "Failed to remove bot");
+  };
+
   const startGameAsHost = async () => {
     if (!authenticatedUserId || !waitingLobbySnapshot) return;
     setIsLobbyActionLoading(true);
@@ -115,27 +145,24 @@ export default function GameLobbyPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
         <Loader2 className="w-8 h-8 text-gold animate-spin" />
-        <p className="text-cream/50">Loading lobby...</p>
+        <p className="text-cream/50 text-sm">Loading…</p>
       </div>
     );
   }
 
   if (authStatus === "unauthenticated") {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="max-w-md mx-auto px-4 py-12">
         <Link href="/" className="inline-flex items-center gap-1 text-cream/40 hover:text-cream/60 text-sm mb-8">
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>
-        <div className="text-center mb-10">
-          <Castle className="w-14 h-14 text-gold mx-auto mb-4" />
-          <h1 className="font-serif text-4xl text-cream">Enter the Mansion</h1>
-          <p className="text-cream/55 mt-2">Sign in, register, or play as a guest to join a game</p>
-        </div>
+        <h1 className="font-serif text-3xl text-cream text-center mb-2">Lobby</h1>
+        <p className="text-cream/50 text-sm text-center mb-8">Sign in or play as guest</p>
         <GuestQuickPlayCard />
-        <p className="text-center mt-6 text-sm text-cream/45">
+        <p className="text-center mt-5 text-sm text-cream/45">
           <Link href="/auth/login" className="text-gold hover:underline">Sign in</Link>
           {" · "}
-          <Link href="/auth/signup" className="text-gold hover:underline">Create account</Link>
+          <Link href="/auth/signup" className="text-gold hover:underline">Sign up</Link>
         </p>
       </div>
     );
@@ -147,126 +174,142 @@ export default function GameLobbyPage() {
     const hasMinimumPlayers = playerCount >= MIN_PLAYERS;
 
     return (
-      <div className="max-w-2xl mx-auto px-4 py-10">
+      <div className="max-w-xl mx-auto px-4 py-10">
         <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="space-y-6"
+          className="rounded-2xl bg-mansion-card border border-cream/10 p-6 sm:p-8 shadow-2xl space-y-6"
         >
-          <div className="rounded-2xl bg-mansion-card border border-cream/10 p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <Users className="w-10 h-10 text-gold mx-auto mb-3" />
-              <h1 className="font-serif text-3xl text-cream">Waiting Lobby</h1>
-              <p className="text-cream/50 mt-1">
-                {playerCount}/{MAX_PLAYERS} detectives · min {MIN_PLAYERS} to start
-              </p>
+          <div className="text-center">
+            <h1 className="font-serif text-2xl text-cream">Waiting Room</h1>
+            <p className="text-cream/50 text-sm mt-1">
+              {playerCount}/{MAX_PLAYERS} players · need {MIN_PLAYERS} to start
+            </p>
+          </div>
+
+          <LobbyInviteSharePanel lobbyInviteCode={waitingLobbySnapshot.lobbyInviteCode} />
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs uppercase tracking-wider text-cream/40">Players</h2>
+              {isCurrentUserHost && playerCount < MAX_PLAYERS && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={addBotToLobby}
+                  loading={isLobbyActionLoading}
+                >
+                  <Bot className="w-4 h-4" /> Add Bot
+                </Button>
+              )}
             </div>
-
-            <LobbyInviteSharePanel lobbyInviteCode={waitingLobbySnapshot.lobbyInviteCode} />
-
-            <div className="space-y-2 mt-6">
+            <div className="space-y-2">
               {waitingLobbySnapshot.waitingPlayers.map((player) => (
                 <div
                   key={player.userId}
                   className="flex items-center gap-3 p-3 rounded-xl bg-mansion-dark/60 border border-cream/5"
                 >
                   <div
-                    className="w-9 h-9 rounded-full border-2 border-white/25 flex items-center justify-center text-xs font-bold text-white"
+                    className="w-8 h-8 rounded-full border-2 border-white/25 flex items-center justify-center text-xs font-bold text-white"
                     style={{
                       backgroundColor:
                         PLAYER_COLORS.find((c) => c.id === player.tokenColorId)?.hex ?? "#888",
                     }}
                   >
-                    {player.displayName[0]}
+                    {player.isBot ? <Bot className="w-4 h-4" /> : player.displayName[0]}
                   </div>
-                  <span className="text-cream font-medium">{player.displayName}</span>
+                  <span className="text-cream text-sm font-medium">{player.displayName}</span>
+                  {player.isBot && (
+                    <span className="text-xs bg-gold/15 text-gold px-2 py-0.5 rounded-full">
+                      Bot
+                    </span>
+                  )}
                   {player.userId === authenticatedUserId && (
-                    <span className="text-xs text-cream/40">(you)</span>
+                    <span className="text-xs text-cream/40">you</span>
                   )}
                   {player.isHost && (
                     <span className="ml-auto text-xs bg-gold/20 text-gold px-2 py-0.5 rounded-full flex items-center gap-1">
                       <Crown className="w-3 h-3" /> Host
                     </span>
                   )}
+                  {isCurrentUserHost && player.isBot && (
+                    <button
+                      type="button"
+                      onClick={() => removeBotFromLobby(player.userId)}
+                      className="ml-auto p-1 rounded-lg hover:bg-red-500/20 text-cream/40 hover:text-red-300"
+                      aria-label={`Remove ${player.displayName}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-
-            {lobbyErrorMessage && (
-              <div className="mt-4 p-3 rounded-xl bg-red-900/30 border border-red-500/30 text-red-300 text-sm">
-                {lobbyErrorMessage}
-              </div>
-            )}
-
-            <div className="mt-6">
-              {isCurrentUserHost ? (
-                <Button
-                  variant="gold"
-                  className="w-full"
-                  onClick={startGameAsHost}
-                  loading={isLobbyActionLoading}
-                  disabled={!hasMinimumPlayers}
-                >
-                  <Play className="w-5 h-5" />
-                  {hasMinimumPlayers
-                    ? "Start Investigation"
-                    : `Waiting for ${MIN_PLAYERS - playerCount} more detective(s)`}
-                </Button>
-              ) : (
-                <p className="text-center text-cream/50 flex items-center justify-center gap-2 animate-pulse">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Waiting for host to start...
-                </p>
-              )}
-            </div>
           </div>
+
+          {lobbyErrorMessage && (
+            <div className="p-3 rounded-xl bg-red-900/30 border border-red-500/30 text-red-300 text-sm">
+              {lobbyErrorMessage}
+            </div>
+          )}
+
+          {isCurrentUserHost ? (
+            <Button
+              variant="gold"
+              className="w-full"
+              onClick={startGameAsHost}
+              loading={isLobbyActionLoading}
+              disabled={!hasMinimumPlayers}
+            >
+              <Play className="w-5 h-5" />
+              {hasMinimumPlayers
+                ? "Start Game"
+                : `Need ${MIN_PLAYERS - playerCount} more player${MIN_PLAYERS - playerCount === 1 ? "" : "s"}`}
+            </Button>
+          ) : (
+            <p className="text-center text-cream/50 text-sm flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Waiting for host…
+            </p>
+          )}
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="text-center mb-10">
-          <Castle className="w-12 h-12 text-gold mx-auto mb-4" />
-          <h1 className="font-serif text-4xl text-cream">Game Lobby</h1>
-          <p className="text-cream/55 mt-2">Host a new mystery or join friends with their code</p>
-          <Link
-            href="/guide"
-            className="inline-flex items-center gap-1.5 mt-4 text-sm text-gold/80 hover:text-gold transition-colors"
-          >
-            <BookOpen className="w-4 h-4" /> New? Read the Detective&apos;s Guidebook
-          </Link>
+    <div className="max-w-xl mx-auto px-4 py-12">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="text-center mb-8">
+          <h1 className="font-serif text-3xl text-cream">Lobby</h1>
+          <p className="text-cream/50 text-sm mt-1">Create a game or join with a code</p>
           {authSession?.user?.isGuest && (
             <span className="inline-block mt-3 text-xs bg-gold/15 text-gold px-3 py-1 rounded-full">
-              Playing as guest — {authSession.user.name}
+              Guest · {authSession.user.name}
             </span>
           )}
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="rounded-2xl bg-mansion-card border border-cream/10 p-6 shadow-xl hover:border-gold/20 transition-colors">
-            <PlusCircle className="w-10 h-10 text-gold mb-3" />
-            <h2 className="font-serif text-xl text-cream">Create Lobby</h2>
-            <p className="text-cream/50 text-sm mt-2 mb-6">
-              Start a new game for {MIN_PLAYERS}–{MAX_PLAYERS} detectives. Share the QR code or link.
-            </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl bg-mansion-card border border-cream/10 p-5 shadow-xl">
+            <PlusCircle className="w-8 h-8 text-gold mb-3" />
+            <h2 className="font-serif text-lg text-cream">Create</h2>
+            <p className="text-cream/45 text-xs mt-1 mb-4">{MIN_PLAYERS}–{MAX_PLAYERS} players</p>
             <Button variant="gold" className="w-full" onClick={createNewLobby} loading={isLobbyActionLoading}>
-              <Castle className="w-4 h-4" /> Create Game
+              New Game
             </Button>
           </div>
 
-          <div className="rounded-2xl bg-mansion-card border border-cream/10 p-6 shadow-xl hover:border-gold/20 transition-colors">
-            <KeyRound className="w-10 h-10 text-gold mb-3" />
-            <h2 className="font-serif text-xl text-cream">Join with Code</h2>
-            <p className="text-cream/50 text-sm mt-2 mb-4">Enter the 6-character code from your friend</p>
+          <div className="rounded-2xl bg-mansion-card border border-cream/10 p-5 shadow-xl">
+            <KeyRound className="w-8 h-8 text-gold mb-3" />
+            <h2 className="font-serif text-lg text-cream">Join</h2>
             <Input
               value={manualJoinCodeInput}
               onChange={(e) => setManualJoinCodeInput(e.target.value.toUpperCase())}
               placeholder="ABC123"
               maxLength={6}
-              className="mb-4 text-center text-2xl tracking-[0.3em] font-mono"
+              className="mt-3 mb-3 text-center text-xl tracking-[0.25em] font-mono"
+              aria-label="Lobby code"
             />
             <Button
               variant="secondary"
@@ -275,20 +318,20 @@ export default function GameLobbyPage() {
               loading={isLobbyActionLoading}
               disabled={manualJoinCodeInput.length < 6}
             >
-              <Users className="w-4 h-4" /> Join Game
+              Join
             </Button>
           </div>
         </div>
 
         {lobbyErrorMessage && (
-          <div className="mt-6 p-3 rounded-xl bg-red-900/30 border border-red-500/30 text-red-300 text-sm text-center">
+          <div className="mt-4 p-3 rounded-xl bg-red-900/30 border border-red-500/30 text-red-300 text-sm text-center">
             {lobbyErrorMessage}
           </div>
         )}
 
-        <p className="text-center mt-8">
-          <Link href="/" className="text-cream/40 hover:text-cream/60 text-sm inline-flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" /> Back to home
+        <p className="text-center mt-6">
+          <Link href="/guide" className="text-sm text-gold/70 hover:text-gold inline-flex items-center gap-1">
+            <BookOpen className="w-3.5 h-3.5" /> How to play
           </Link>
         </p>
       </motion.div>

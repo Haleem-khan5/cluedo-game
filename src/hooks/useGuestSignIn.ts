@@ -31,7 +31,7 @@ export function useGuestSignIn(options: UseGuestSignInOptions = {}) {
       setIsGuestSignInLoading(false);
 
       if (result?.error) {
-        setGuestSignInError("Could not start guest session. Please try again.");
+        setGuestSignInError("Could not start guest session. Is PostgreSQL running? Try: docker compose up -d");
         return { success: false as const };
       }
 

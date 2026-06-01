@@ -25,7 +25,7 @@ interface GuestQuickPlayCardProps {
 export function GuestQuickPlayCard({
   redirectAfterGuestSignIn = "/lobby",
   title = "Play as Guest",
-  description = "Jump in instantly — no account needed. Pick a detective name and join the mansion.",
+  description = "No account needed.",
   onGuestSignedIn,
 }: GuestQuickPlayCardProps) {
   const [guestDisplayNameInput, setGuestDisplayNameInput] = useState("");
@@ -61,10 +61,10 @@ export function GuestQuickPlayCard({
       <form onSubmit={handleGuestPlaySubmit} className="mt-5 space-y-3">
         <Input
           id="guestDisplayName"
-          label="Detective Name"
+          label="Your name"
           value={guestDisplayNameInput}
           onChange={(e) => setGuestDisplayNameInput(e.target.value)}
-          placeholder="e.g. Inspector Lane"
+          placeholder="Detective Lane"
           maxLength={30}
         />
 
@@ -79,7 +79,7 @@ export function GuestQuickPlayCard({
           loading={isGuestSignInLoading}
         >
           <Sparkles className="w-4 h-4" />
-          Continue as Guest
+          Continue
         </Button>
       </form>
 

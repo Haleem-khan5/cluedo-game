@@ -111,8 +111,8 @@ export default function JoinLobbyByCodePage() {
         >
           <div className="text-center">
             <Castle className="w-12 h-12 text-gold mx-auto mb-3" />
-            <h1 className="font-serif text-2xl text-cream">You&apos;re In!</h1>
-            <p className="text-cream/50 mt-2">Waiting for the host to start the investigation</p>
+            <h1 className="font-serif text-2xl text-cream">You&apos;re in</h1>
+            <p className="text-cream/50 text-sm mt-1">Waiting for host to start</p>
           </div>
 
           <LobbyInviteSharePanel lobbyInviteCode={waitingLobbySnapshot.lobbyInviteCode} />
@@ -178,7 +178,7 @@ export default function JoinLobbyByCodePage() {
         <GuestQuickPlayCard
           redirectAfterGuestSignIn={`/join/${lobbyInviteCodeFromUrl}`}
           title="Join as Guest"
-          description="Enter your detective name — no sign-up required. You'll join the lobby automatically."
+          description={`Lobby ${lobbyInviteCodeFromUrl}`}
         />
       </div>
     );

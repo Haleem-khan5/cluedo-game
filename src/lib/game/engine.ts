@@ -11,15 +11,8 @@ import {
   type Suspect,
   type Weapon,
 } from "./constants";
-import {
-  enterRoom,
-  getRoomAt,
-  getValidMoves,
-  hasSecretPassage,
-  type Position,
-} from "./board";
 
-export type TurnPhase = "roll" | "move" | "suggest" | "disprove" | "accuse" | "end";
+export type TurnPhase = "turn" | "disprove";
 
 export interface GameSolution {
   suspect: Suspect;
@@ -32,13 +25,14 @@ export interface PlayerState {
   userId: string;
   displayName: string;
   color: string;
-  position: Position;
+  position: { x: number; y: number };
   currentRoom: Room | null;
   hand: Card[];
   canAccuse: boolean;
   isEliminated: boolean;
   turnOrder: number;
   isConnected: boolean;
+  isBot?: boolean;
 }
 
 export interface SuspectTokenState {
@@ -52,6 +46,19 @@ export interface PendingSuggestion {
   room: Room;
   suggesterId: string;
   disproveIndex: number;
+}
+
+/** Public record of an interrogation — visible to all players (never reveals which card was shown). */
+export interface InterrogationLogEntry {
+  id: string;
+  suggesterId: string;
+  suggesterName: string;
+  suspect: Suspect;
+  weapon: Weapon;
+  room: Room;
+  outcome: "pending" | "disproved" | "unrefuted";
+  /** Name of the player who disproved (card stays private to the interrogator). */
+  disprovedByName?: string;
 }
 
 export interface GameState {
@@ -69,16 +76,18 @@ export interface GameState {
   winnerId: string | null;
   lastAction: string | null;
   movedViaSecretPassage: boolean;
+  /** Chronological record of every interrogation this game. */
+  interrogationLog: InterrogationLogEntry[];
 }
 
-export interface PrivateGameView {
-  hand: Card[];
-  solution?: GameSolution;
-  revealedCard?: Card;
-  disprovePrompt?: {
-    suggestion: PendingSuggestion;
-    matchingCards: Card[];
-  };
+function updateLastLog(
+  log: InterrogationLogEntry[],
+  patch: Partial<InterrogationLogEntry>
+): InterrogationLogEntry[] {
+  if (log.length === 0) return log;
+  return log.map((entry, i) =>
+    i === log.length - 1 ? { ...entry, ...patch } : entry
+  );
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -100,20 +109,15 @@ export function createSolution(): GameSolution {
   };
 }
 
-export function dealCards(
-  solution: GameSolution,
-  playerCount: number
-): Card[][] {
+export function dealCards(solution: GameSolution, playerCount: number): Card[][] {
   const remaining: Card[] = [...SUSPECTS, ...WEAPONS, ...ROOMS].filter(
     (c) => c !== solution.suspect && c !== solution.weapon && c !== solution.room
   );
   const shuffled = shuffle(remaining);
   const hands: Card[][] = Array.from({ length: playerCount }, () => []);
-
   shuffled.forEach((card, i) => {
     hands[i % playerCount].push(card);
   });
-
   return hands;
 }
 
@@ -138,11 +142,13 @@ export function initializeGame(
     room: SUSPECT_TOKENS[s].room!,
   }));
 
+  const firstPlayer = playerStates[0];
+
   const state: GameState = {
     id: sessionId,
     lobbyCode,
     status: "playing",
-    phase: "roll",
+    phase: "turn",
     turnIndex: 0,
     diceRoll: null,
     hasMoved: false,
@@ -151,8 +157,9 @@ export function initializeGame(
     suspectTokens,
     pendingSuggestion: null,
     winnerId: null,
-    lastAction: "Game started! Roll the dice.",
+    lastAction: `${firstPlayer.displayName}'s turn — interrogate or accuse.`,
     movedViaSecretPassage: false,
+    interrogationLog: [],
   };
 
   return { state, solution };
@@ -162,128 +169,40 @@ export function getCurrentPlayer(state: GameState): PlayerState {
   return state.players[state.turnIndex];
 }
 
-export function rollDice(state: GameState): { state: GameState; error?: string } {
-  if (state.phase !== "roll") return { state, error: "Not roll phase" };
-  if (state.status === "finished") return { state, error: "Game is finished" };
-
-  const roll = Math.floor(Math.random() * 6) + 1;
-  return {
-    state: {
-      ...state,
-      diceRoll: roll,
-      phase: "move",
-      hasMoved: false,
-      hasSuggested: false,
-      movedViaSecretPassage: false,
-      lastAction: `${getCurrentPlayer(state).displayName} rolled a ${roll}.`,
-    },
-  };
-}
-
-export function movePlayer(
-  state: GameState,
-  playerId: string,
-  target: Position
-): { state: GameState; error?: string } {
-  if (state.phase !== "move") return { state, error: "Not move phase" };
-
-  const current = getCurrentPlayer(state);
-  if (current.id !== playerId) return { state, error: "Not your turn" };
-  if (state.hasMoved) return { state, error: "Already moved this turn" };
-  if (state.diceRoll === null) return { state, error: "Roll dice first" };
-
-  const occupied = state.players
-    .filter((p) => !p.isEliminated)
-    .map((p) => p.position);
-
-  const valid = getValidMoves(current.position, state.diceRoll, occupied);
-  const isValid = valid.some((v) => v.x === target.x && v.y === target.y);
-
-  if (!isValid) return { state, error: "Invalid move" };
-
-  const roomAtTarget = getRoomAt(target.x, target.y);
-  let newRoom: Room | null = current.currentRoom;
-  let newPosition = target;
-
-  if (roomAtTarget) {
-    const entry = enterRoom(current.position, roomAtTarget);
-    if (entry) {
-      newPosition = entry;
-      newRoom = roomAtTarget;
-    }
-  } else {
-    newRoom = null;
+function advanceToNextPlayer(state: GameState, lastAction: string): GameState {
+  let nextIndex = (state.turnIndex + 1) % state.players.length;
+  let attempts = 0;
+  while (state.players[nextIndex].isEliminated && attempts < state.players.length) {
+    nextIndex = (nextIndex + 1) % state.players.length;
+    attempts++;
   }
 
-  const players = state.players.map((p) =>
-    p.id === playerId
-      ? { ...p, position: newPosition, currentRoom: newRoom }
-      : p
-  );
-
-  const nextPhase: TurnPhase = newRoom ? "suggest" : "accuse";
-
+  const nextPlayer = state.players[nextIndex];
   return {
-    state: {
-      ...state,
-      players,
-      hasMoved: true,
-      phase: nextPhase,
-      lastAction: `${current.displayName} moved to ${newRoom ?? `(${target.x}, ${target.y})`}.`,
-    },
+    ...state,
+    turnIndex: nextIndex,
+    phase: "turn",
+    pendingSuggestion: null,
+    hasMoved: false,
+    hasSuggested: false,
+    movedViaSecretPassage: false,
+    diceRoll: null,
+    lastAction: lastAction || `${nextPlayer.displayName}'s turn — interrogate or accuse.`,
   };
 }
 
-export function useSecretPassage(
-  state: GameState,
-  playerId: string,
-  targetRoom: Room
-): { state: GameState; error?: string } {
-  if (state.phase !== "move") return { state, error: "Not move phase" };
-
-  const current = getCurrentPlayer(state);
-  if (current.id !== playerId) return { state, error: "Not your turn" };
-  if (state.hasMoved) return { state, error: "Already moved" };
-  if (!current.currentRoom) return { state, error: "Must be in a room" };
-  if (!hasSecretPassage(current.currentRoom, targetRoom)) {
-    return { state, error: "No secret passage to that room" };
-  }
-
-  const entry = enterRoom(current.position, targetRoom);
-  if (!entry) return { state, error: "Cannot enter room" };
-
-  const players = state.players.map((p) =>
-    p.id === playerId
-      ? { ...p, position: entry, currentRoom: targetRoom }
-      : p
-  );
-
-  return {
-    state: {
-      ...state,
-      players,
-      hasMoved: true,
-      movedViaSecretPassage: true,
-      phase: "suggest",
-      lastAction: `${current.displayName} used a secret passage to ${targetRoom}!`,
-    },
-  };
-}
-
-export function makeSuggestion(
+export function makeInterrogation(
   state: GameState,
   playerId: string,
   suspect: Suspect,
-  weapon: Weapon
+  weapon: Weapon,
+  room: Room
 ): { state: GameState; error?: string } {
-  if (state.phase !== "suggest") return { state, error: "Cannot suggest now" };
+  if (state.phase !== "turn") return { state, error: "Not your turn to act" };
 
   const current = getCurrentPlayer(state);
   if (current.id !== playerId) return { state, error: "Not your turn" };
-  if (!current.currentRoom) return { state, error: "Must be in a room" };
-  if (state.hasSuggested) return { state, error: "Already suggested this turn" };
 
-  const room = current.currentRoom;
   const nextPlayerIndex = (state.turnIndex + 1) % state.players.length;
 
   const suspectTokens = state.suspectTokens.map((t) =>
@@ -298,6 +217,16 @@ export function makeSuggestion(
     disproveIndex: nextPlayerIndex,
   };
 
+  const logEntry: InterrogationLogEntry = {
+    id: `il_${state.interrogationLog.length}`,
+    suggesterId: playerId,
+    suggesterName: current.displayName,
+    suspect,
+    weapon,
+    room,
+    outcome: "pending",
+  };
+
   return {
     state: {
       ...state,
@@ -305,9 +234,20 @@ export function makeSuggestion(
       pendingSuggestion: pending,
       hasSuggested: true,
       phase: "disprove",
-      lastAction: `${current.displayName} suggests ${suspect} with ${weapon} in ${room}.`,
+      lastAction: `${current.displayName} interrogates: ${suspect}, ${room}, ${weapon}.`,
+      interrogationLog: [...state.interrogationLog, logEntry],
     },
   };
+}
+
+export function makeSuggestion(
+  state: GameState,
+  playerId: string,
+  suspect: Suspect,
+  weapon: Weapon,
+  room?: Room
+): { state: GameState; error?: string } {
+  return makeInterrogation(state, playerId, suspect, weapon, room ?? ROOMS[0]);
 }
 
 export function getMatchingCards(hand: Card[], suggestion: PendingSuggestion): Card[] {
@@ -318,36 +258,47 @@ export function getMatchingCards(hand: Card[], suggestion: PendingSuggestion): C
   return matches;
 }
 
+function finishInterrogationRound(state: GameState, message: string): GameState {
+  return advanceToNextPlayer({ ...state, pendingSuggestion: null }, message);
+}
+
 export function disproveSuggestion(
   state: GameState,
   playerId: string,
   card: Card
 ): { state: GameState; error?: string; revealedTo?: string } {
   if (state.phase !== "disprove" || !state.pendingSuggestion) {
-    return { state, error: "No pending suggestion" };
+    return { state, error: "No pending interrogation" };
   }
 
   const pending = state.pendingSuggestion;
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return { state, error: "Player not found" };
 
-  const expectedIndex = pending.disproveIndex;
-  const expectedPlayer = state.players[expectedIndex];
+  const expectedPlayer = state.players[pending.disproveIndex];
   if (expectedPlayer.id !== playerId) {
-    return { state, error: "Not your turn to disprove" };
+    return { state, error: "Not your turn to reveal" };
   }
 
   const matches = getMatchingCards(player.hand, pending);
   if (matches.length === 0) return { state, error: "You have no matching cards" };
   if (!matches.includes(card)) return { state, error: "That card does not match" };
 
+  const suggester = state.players.find((p) => p.id === pending.suggesterId);
+
+  const stateWithLog: GameState = {
+    ...state,
+    interrogationLog: updateLastLog(state.interrogationLog, {
+      outcome: "disproved",
+      disprovedByName: player.displayName,
+    }),
+  };
+
   return {
-    state: {
-      ...state,
-      pendingSuggestion: null,
-      phase: "accuse",
-      lastAction: `${player.displayName} disproved the suggestion.`,
-    },
+    state: finishInterrogationRound(
+      stateWithLog,
+      `${player.displayName} revealed a card to ${suggester?.displayName ?? "the interrogator"}.`
+    ),
     revealedTo: pending.suggesterId,
   };
 }
@@ -357,36 +308,37 @@ export function passDisprove(
   playerId: string
 ): { state: GameState; error?: string } {
   if (state.phase !== "disprove" || !state.pendingSuggestion) {
-    return { state, error: "No pending suggestion" };
+    return { state, error: "No pending interrogation" };
   }
 
   const pending = state.pendingSuggestion;
   const expectedPlayer = state.players[pending.disproveIndex];
   if (expectedPlayer.id !== playerId) {
-    return { state, error: "Not your turn to disprove" };
+    return { state, error: "Not your turn to reveal" };
   }
 
   const matches = getMatchingCards(expectedPlayer.hand, pending);
   if (matches.length > 0) {
-    return { state, error: "You must show a matching card" };
+    return { state, error: "You must reveal a matching card" };
   }
 
   let nextIndex = (pending.disproveIndex + 1) % state.players.length;
-  while (
-    nextIndex !== state.turnIndex &&
-    state.players[nextIndex].isEliminated
-  ) {
+  while (nextIndex !== state.turnIndex && state.players[nextIndex].isEliminated) {
     nextIndex = (nextIndex + 1) % state.players.length;
   }
 
   if (nextIndex === state.turnIndex) {
+    const stateWithLog: GameState = {
+      ...state,
+      interrogationLog: updateLastLog(state.interrogationLog, {
+        outcome: "unrefuted",
+      }),
+    };
     return {
-      state: {
-        ...state,
-        pendingSuggestion: null,
-        phase: "accuse",
-        lastAction: "No one could disprove the suggestion.",
-      },
+      state: finishInterrogationRound(
+        stateWithLog,
+        "No one could disprove the interrogation."
+      ),
     };
   }
 
@@ -394,7 +346,7 @@ export function passDisprove(
     state: {
       ...state,
       pendingSuggestion: { ...pending, disproveIndex: nextIndex },
-      lastAction: `${expectedPlayer.displayName} could not disprove.`,
+      lastAction: `${expectedPlayer.displayName} has no matching cards.`,
     },
   };
 }
@@ -407,7 +359,7 @@ export function makeAccusation(
   room: Room,
   solution: GameSolution
 ): { state: GameState; error?: string } {
-  if (state.phase !== "accuse" && state.phase !== "suggest") {
+  if (state.phase !== "turn") {
     return { state, error: "Cannot accuse now" };
   }
 
@@ -426,9 +378,8 @@ export function makeAccusation(
         ...state,
         status: "finished",
         winnerId: playerId,
-        phase: "end",
         pendingSuggestion: null,
-        lastAction: `${current.displayName} made a correct accusation and wins!`,
+        lastAction: `${current.displayName} accused correctly and wins!`,
       },
     };
   }
@@ -445,60 +396,32 @@ export function makeAccusation(
         players,
         status: "finished",
         winnerId: null,
-        phase: "end",
         pendingSuggestion: null,
-        lastAction: `${current.displayName} made a wrong accusation. No one wins!`,
+        lastAction: `${current.displayName} accused wrongly. No one wins!`,
       },
     };
   }
 
   return {
-    state: {
-      ...state,
-      players,
-      pendingSuggestion: null,
-      phase: "end",
-      lastAction: `${current.displayName} made a wrong accusation and is eliminated.`,
-    },
+    state: advanceToNextPlayer(
+      { ...state, players, pendingSuggestion: null },
+      `${current.displayName} accused wrongly and is out.`
+    ),
   };
 }
 
 export function endTurn(state: GameState, playerId: string): { state: GameState; error?: string } {
+  if (state.phase !== "turn") {
+    return { state, error: "Cannot skip during interrogation" };
+  }
   const current = getCurrentPlayer(state);
   if (current.id !== playerId) return { state, error: "Not your turn" };
-
-  if (state.phase === "disprove") {
-    return { state, error: "Must resolve suggestion first" };
-  }
-
-  if (state.phase === "move" && !state.hasMoved) {
-    return { state, error: "Must move or use secret passage first" };
-  }
-
-  let nextIndex = (state.turnIndex + 1) % state.players.length;
-  let attempts = 0;
-  while (state.players[nextIndex].isEliminated && attempts < state.players.length) {
-    nextIndex = (nextIndex + 1) % state.players.length;
-    attempts++;
-  }
-
   return {
-    state: {
-      ...state,
-      turnIndex: nextIndex,
-      phase: "roll",
-      diceRoll: null,
-      hasMoved: false,
-      hasSuggested: false,
-      movedViaSecretPassage: false,
-      lastAction: `${state.players[nextIndex].displayName}'s turn.`,
-    },
+    state: advanceToNextPlayer(state, `${current.displayName} passed.`),
   };
 }
 
-export function sanitizeStateForPlayer(state: GameState, playerId: string): Omit<GameState, "players"> & {
-  players: Omit<PlayerState, "hand">[];
-} {
+export function sanitizeStateForPlayer(state: GameState, _playerId: string) {
   return {
     ...state,
     players: state.players.map((p) => {

@@ -53,8 +53,8 @@ export function LoginPageContent() {
       >
         <div className="text-center mb-8">
           <KeyRound className="w-14 h-14 text-gold mx-auto mb-4" />
-          <h1 className="font-serif text-3xl text-cream">Welcome Back</h1>
-          <p className="text-cream/55 mt-2">Sign in or play as a guest detective</p>
+          <h1 className="font-serif text-3xl text-cream">Sign In</h1>
+          <p className="text-cream/50 text-sm mt-1">Account or guest play</p>
         </div>
 
         <div className="rounded-2xl bg-mansion-card border border-cream/10 p-6 space-y-6 shadow-2xl">
@@ -110,11 +110,7 @@ export function LoginPageContent() {
               </Button>
             </form>
           ) : (
-            <GuestQuickPlayCard
-              redirectAfterGuestSignIn={redirectAfterAuth}
-              title="Quick Guest Play"
-              description="No account needed — pick a name and join the investigation."
-            />
+            <GuestQuickPlayCard redirectAfterGuestSignIn={redirectAfterAuth} />
           )}
 
           {activeAuthTab === "signIn" && (

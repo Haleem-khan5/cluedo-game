@@ -4,6 +4,7 @@ import { parse } from "url";
 import next from "next";
 import { initSocketServer } from "./server/socket";
 import { startNgrokTunnel, logPresetPublicUrl } from "./server/ngrokTunnel";
+import { ensureDatabaseReady } from "./server/dbInit";
 import { getPublicAppBaseUrl, isNgrokConfigured } from "@/lib/config/publicAppUrl";
 
 const isDevMode = process.env.NODE_ENV !== "production";
@@ -28,6 +29,12 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 nextApp.prepare().then(async () => {
+  try {
+    await ensureDatabaseReady();
+  } catch {
+    console.error("> Server starting without a healthy database — auth and lobbies will fail.");
+  }
+
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true);
     handleNextRequest(req, res, parsedUrl);

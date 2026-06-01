@@ -3,6 +3,7 @@ import { Server, Socket } from "socket.io";
 import { prisma } from "@/lib/prisma";
 import { generateLobbyCode } from "@/lib/utils";
 import { getAllowedSocketOrigins } from "@/lib/config/publicAppUrl";
+import { pickRandomBotName } from "@/lib/game/botNames";
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -11,44 +12,23 @@ import {
 import {
   createSolution,
   initializeGame,
-  rollDice,
-  movePlayer,
-  useSecretPassage,
+  makeInterrogation,
   makeSuggestion,
   disproveSuggestion,
   passDisprove,
   makeAccusation,
-  endTurn,
   sanitizeStateForPlayer,
   getMatchingCards,
-  type GameState,
-  type GameSolution,
 } from "@/lib/game/engine";
-import type { Position } from "@/lib/game/board";
 import type { Room, Suspect, Weapon } from "@/lib/game/constants";
+import type { ActiveLobby, ActiveGame, LobbyPlayer } from "./socketTypes";
+import {
+  createBotUser,
+  scheduleBotTurns,
+  initBotBrainsForGame,
+} from "./botRunner";
 
-interface LobbyPlayer {
-  userId: string;
-  displayName: string;
-  color: string;
-  socketId: string;
-  isHost: boolean;
-}
-
-interface ActiveLobby {
-  id: string;
-  code: string;
-  hostId: string;
-  players: LobbyPlayer[];
-}
-
-interface ActiveGame {
-  state: GameState;
-  solution: GameSolution;
-  lobbyId: string;
-  playerSocketMap: Map<string, string>;
-  revealedCards: Map<string, { card: string; toPlayerId: string }>;
-}
+export type { ActiveLobby, ActiveGame, LobbyPlayer } from "./socketTypes";
 
 const lobbies = new Map<string, ActiveLobby>();
 const games = new Map<string, ActiveGame>();
@@ -63,7 +43,52 @@ function getGameRoom(sessionId: string) {
   return `game:${sessionId}`;
 }
 
-function emitGameState(io: Server, game: ActiveGame) {
+/**
+ * Walks the disprove chain circularly (asker → next → next …).
+ * Auto-passes human players who hold none of the asked cards, and prompts the
+ * first human who can disprove. Bot disprovers are left to the bot scheduler.
+ */
+function deliverDisprovePrompts(io: Server, game: ActiveGame) {
+  let guard = 0;
+  while (
+    game.state.phase === "disprove" &&
+    game.state.pendingSuggestion &&
+    game.state.status === "playing" &&
+    guard++ < game.state.players.length + 1
+  ) {
+    const pending = game.state.pendingSuggestion;
+    const disprover = game.state.players[pending.disproveIndex];
+    if (!disprover) break;
+
+    // Bots resolve their own step (with thinking delay) via the scheduler.
+    if (game.botUserIds.has(disprover.userId)) break;
+
+    const matches = getMatchingCards(disprover.hand, pending);
+    if (matches.length > 0) {
+      const socketId = game.playerSocketMap.get(disprover.userId);
+      if (socketId) {
+        io.to(socketId).emit("game:disprovePrompt", {
+          suggestion: pending,
+          matchingCards: matches,
+        });
+      }
+      break;
+    }
+
+    // Human with no matching cards — auto-pass to the next detective.
+    const result = passDisprove(game.state, disprover.id);
+    if (result.error) break;
+    game.state = result.state;
+  }
+}
+
+function emitGameState(
+  io: Server,
+  game: ActiveGame,
+  options?: { scheduleBots?: boolean }
+) {
+  deliverDisprovePrompts(io, game);
+
   const sessionId = game.state.id;
   const room = getGameRoom(sessionId);
 
@@ -85,6 +110,10 @@ function emitGameState(io: Server, game: ActiveGame) {
     ...sanitizeStateForPlayer(game.state, ""),
     players: game.state.players.map(({ hand, ...rest }) => rest),
   });
+
+  if (options?.scheduleBots !== false) {
+    scheduleBotTurns(sessionId, game, io, (srv, g) => emitGameState(srv, g));
+  }
 }
 
 export function initSocketServer(httpServer: HttpServer) {
@@ -100,6 +129,19 @@ export function initSocketServer(httpServer: HttpServer) {
   io.on("connection", (socket: Socket) => {
     socket.on("auth:register", ({ userId }: { userId: string }) => {
       socketToUser.set(socket.id, userId);
+    });
+
+    socket.on("lobby:listPublic", (_payload, callback) => {
+      const publicLobbies = Array.from(lobbies.values()).map((lobby) => {
+        const host = lobby.players.find((p) => p.isHost);
+        return {
+          code: lobby.code,
+          hostName: host?.displayName ?? "Host",
+          playerCount: lobby.players.length,
+          maxPlayers: MAX_PLAYERS,
+        };
+      });
+      callback?.({ success: true, lobbies: publicLobbies });
     });
 
     socket.on("lobby:create", async ({ userId, displayName }, callback) => {
@@ -133,7 +175,8 @@ export function initSocketServer(httpServer: HttpServer) {
         callback?.({ success: true, code, lobby: activeLobby });
         io.to(getLobbyRoom(code)).emit("lobby:update", activeLobby);
       } catch (err) {
-        callback?.({ success: false, error: "Failed to create lobby" });
+        console.error("lobby:create error:", err);
+        callback?.({ success: false, error: "Failed to create lobby — is the database running?" });
       }
     });
 
@@ -174,8 +217,74 @@ export function initSocketServer(httpServer: HttpServer) {
 
         callback?.({ success: true, lobby });
         io.to(getLobbyRoom(code.toUpperCase())).emit("lobby:update", lobby);
-      } catch {
+      } catch (err) {
+        console.error("lobby:join error:", err);
         callback?.({ success: false, error: "Failed to join lobby" });
+      }
+    });
+
+    socket.on("lobby:addBot", async ({ code, userId }, callback) => {
+      try {
+        const lobby = lobbies.get(code.toUpperCase());
+        if (!lobby) {
+          callback?.({ success: false, error: "Lobby not found" });
+          return;
+        }
+        if (lobby.hostId !== userId) {
+          callback?.({ success: false, error: "Only host can add bots" });
+          return;
+        }
+        if (lobby.players.length >= MAX_PLAYERS) {
+          callback?.({ success: false, error: "Lobby is full" });
+          return;
+        }
+
+        const displayName = pickRandomBotName(lobby.players.map((p) => p.displayName));
+        const botUser = await createBotUser(displayName);
+
+        const usedColors = new Set(lobby.players.map((p) => p.color));
+        const color = PLAYER_COLORS.find((c) => !usedColors.has(c.id))?.id ?? "burgundy";
+
+        lobby.players.push({
+          userId: botUser.id,
+          displayName: botUser.name,
+          color,
+          socketId: "",
+          isHost: false,
+          isBot: true,
+        });
+
+        callback?.({ success: true, lobby });
+        io.to(getLobbyRoom(code.toUpperCase())).emit("lobby:update", lobby);
+      } catch (err) {
+        console.error("lobby:addBot error:", err);
+        callback?.({ success: false, error: "Failed to add bot — is the database running?" });
+      }
+    });
+
+    socket.on("lobby:removeBot", async ({ code, userId, botUserId }, callback) => {
+      try {
+        const lobby = lobbies.get(code.toUpperCase());
+        if (!lobby) {
+          callback?.({ success: false, error: "Lobby not found" });
+          return;
+        }
+        if (lobby.hostId !== userId) {
+          callback?.({ success: false, error: "Only host can remove bots" });
+          return;
+        }
+
+        const bot = lobby.players.find((p) => p.userId === botUserId && p.isBot);
+        if (!bot) {
+          callback?.({ success: false, error: "Bot not found" });
+          return;
+        }
+
+        lobby.players = lobby.players.filter((p) => p.userId !== botUserId);
+        callback?.({ success: true, lobby });
+        io.to(getLobbyRoom(code.toUpperCase())).emit("lobby:update", lobby);
+      } catch {
+        callback?.({ success: false, error: "Failed to remove bot" });
       }
     });
 
@@ -214,6 +323,7 @@ export function initSocketServer(httpServer: HttpServer) {
           isEliminated: false,
           turnOrder: i,
           isConnected: true,
+          isBot: p.isBot ?? false,
         }));
 
         const { state } = initializeGame(session.id, lobby.code, playerData, solution);
@@ -241,14 +351,21 @@ export function initSocketServer(httpServer: HttpServer) {
         const playerSocketMap = new Map<string, string>();
         lobby.players.forEach((p) => playerSocketMap.set(p.userId, p.socketId));
 
+        const botUserIds = new Set(
+          lobby.players.filter((p) => p.isBot).map((p) => p.userId)
+        );
+
         const game: ActiveGame = {
           state,
           solution,
           lobbyId: lobby.id,
           playerSocketMap,
           revealedCards: new Map(),
+          botUserIds,
+          botBrains: new Map(),
         };
 
+        initBotBrainsForGame(game);
         games.set(session.id, game);
 
         for (const p of lobby.players) {
@@ -282,81 +399,26 @@ export function initSocketServer(httpServer: HttpServer) {
       callback?.({ success: true, state: sanitizeStateForPlayer(game.state, "") });
     });
 
-    socket.on("game:roll", ({ sessionId, userId }, callback) => {
-      const game = games.get(sessionId);
-      if (!game) return callback?.({ success: false, error: "Game not found" });
-
-      const player = game.state.players.find((p) => p.userId === userId);
-      if (!player) return callback?.({ success: false, error: "Player not found" });
-
-      const result = rollDice(game.state);
-      if (result.error) return callback?.({ success: false, error: result.error });
-
-      game.state = result.state;
-      emitGameState(io, game);
-      callback?.({ success: true, roll: result.state.diceRoll });
-    });
-
-    socket.on("game:move", ({ sessionId, userId, target }, callback) => {
-      const game = games.get(sessionId);
-      if (!game) return callback?.({ success: false, error: "Game not found" });
-
-      const player = game.state.players.find((p) => p.userId === userId);
-      if (!player) return callback?.({ success: false, error: "Player not found" });
-
-      const result = movePlayer(game.state, player.id, target as Position);
-      if (result.error) return callback?.({ success: false, error: result.error });
-
-      game.state = result.state;
-      emitGameState(io, game);
-      callback?.({ success: true });
-    });
-
-    socket.on("game:secretPassage", ({ sessionId, userId, room }, callback) => {
-      const game = games.get(sessionId);
-      if (!game) return callback?.({ success: false, error: "Game not found" });
-
-      const player = game.state.players.find((p) => p.userId === userId);
-      if (!player) return callback?.({ success: false, error: "Player not found" });
-
-      const result = useSecretPassage(game.state, player.id, room as Room);
-      if (result.error) return callback?.({ success: false, error: result.error });
-
-      game.state = result.state;
-      emitGameState(io, game);
-      callback?.({ success: true });
-    });
-
     socket.on(
       "game:suggest",
-      ({ sessionId, userId, suspect, weapon }, callback) => {
+      ({ sessionId, userId, suspect, weapon, room }, callback) => {
         const game = games.get(sessionId);
         if (!game) return callback?.({ success: false, error: "Game not found" });
 
         const player = game.state.players.find((p) => p.userId === userId);
         if (!player) return callback?.({ success: false, error: "Player not found" });
 
-        const result = makeSuggestion(
+        const result = makeInterrogation(
           game.state,
           player.id,
           suspect as Suspect,
-          weapon as Weapon
+          weapon as Weapon,
+          room as Room
         );
         if (result.error) return callback?.({ success: false, error: result.error });
 
         game.state = result.state;
         emitGameState(io, game);
-
-        const pending = game.state.pendingSuggestion!;
-        const nextPlayer = game.state.players[pending.disproveIndex];
-        const matches = getMatchingCards(nextPlayer.hand, pending);
-        const socketId = game.playerSocketMap.get(nextPlayer.userId);
-        if (socketId && matches.length > 0) {
-          io.to(socketId).emit("game:disprovePrompt", {
-            suggestion: pending,
-            matchingCards: matches,
-          });
-        }
 
         callback?.({ success: true });
       }
@@ -396,19 +458,6 @@ export function initSocketServer(httpServer: HttpServer) {
       game.state = result.state;
       emitGameState(io, game);
 
-      const pending = game.state.pendingSuggestion;
-      if (pending) {
-        const nextPlayer = game.state.players[pending.disproveIndex];
-        const matches = getMatchingCards(nextPlayer.hand, pending);
-        const socketId = game.playerSocketMap.get(nextPlayer.userId);
-        if (socketId && matches.length > 0) {
-          io.to(socketId).emit("game:disprovePrompt", {
-            suggestion: pending,
-            matchingCards: matches,
-          });
-        }
-      }
-
       callback?.({ success: true });
     });
 
@@ -444,22 +493,6 @@ export function initSocketServer(httpServer: HttpServer) {
         callback?.({ success: true });
       }
     );
-
-    socket.on("game:endTurn", ({ sessionId, userId }, callback) => {
-      const game = games.get(sessionId);
-      if (!game) return callback?.({ success: false, error: "Game not found" });
-
-      const player = game.state.players.find((p) => p.userId === userId);
-      if (!player) return callback?.({ success: false, error: "Player not found" });
-
-      const result = endTurn(game.state, player.id);
-      if (result.error) return callback?.({ success: false, error: result.error });
-
-      game.state = result.state;
-      game.revealedCards.clear();
-      emitGameState(io, game);
-      callback?.({ success: true });
-    });
 
     socket.on("disconnect", () => {
       const lobbyCode = socketToLobby.get(socket.id);
