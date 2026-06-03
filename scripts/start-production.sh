@@ -11,4 +11,4 @@ else
   echo "> WARNING: DATABASE_URL is not set"
 fi
 
-exec tsx server.ts
+exec npx tsx server.ts
