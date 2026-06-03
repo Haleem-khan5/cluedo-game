@@ -1,13 +1,17 @@
 /**
  * Resolves the public-facing app URL for auth callbacks, invite links, and Socket.IO CORS.
  *
- * Priority:
- * 1. BASE_URL — canonical public URL (ngrok or production)
- * 2. NEXTAUTH_URL — legacy auth URL fallback
- * 3. http://localhost:{PORT} — local development default
+ * staging: localhost default; ngrok URL applied at runtime when tunnel starts
+ * production: BASE_URL / NEXTAUTH_URL must be your deployed HTTPS URL
  */
 
-const DEFAULT_LOCAL_PORT = process.env.PORT ?? "3000";
+import {
+  getAppEnvironment,
+  isStagingEnvironment,
+  shouldEnableNgrokTunnel,
+} from "./appEnv";
+
+const DEFAULT_LOCAL_PORT = process.env.PORT ?? "3001";
 
 /** Strips trailing slashes from a URL string. */
 function normalizeBaseUrl(url: string): string {
@@ -19,39 +23,40 @@ function normalizeBaseUrl(url: string): string {
  * Used by ngrok setup, Socket.IO CORS, and SSR invite links.
  */
 export function getPublicAppBaseUrl(): string {
-  if (process.env.BASE_URL) {
-    return normalizeBaseUrl(process.env.BASE_URL);
+  if (process.env.BASE_URL?.trim()) {
+    return normalizeBaseUrl(process.env.BASE_URL.trim());
   }
-  if (process.env.NEXTAUTH_URL) {
-    return normalizeBaseUrl(process.env.NEXTAUTH_URL);
+  if (process.env.NEXTAUTH_URL?.trim()) {
+    return normalizeBaseUrl(process.env.NEXTAUTH_URL.trim());
   }
   return `http://localhost:${DEFAULT_LOCAL_PORT}`;
 }
 
 /**
  * Origins allowed to connect to the Socket.IO server.
- * Includes both local dev and the public ngrok/production URL.
+ * Staging includes localhost; production uses only the public URL.
  */
 export function getAllowedSocketOrigins(): string[] {
   const publicBaseUrl = getPublicAppBaseUrl();
-  const localPort = process.env.PORT ?? "3000";
-  const localOrigins = [
-    `http://localhost:${localPort}`,
-    `http://127.0.0.1:${localPort}`,
-  ];
+  const origins = new Set<string>([publicBaseUrl]);
 
-  const origins = new Set([...localOrigins, publicBaseUrl]);
+  if (isStagingEnvironment()) {
+    const localPort = process.env.PORT ?? "3001";
+    origins.add(`http://localhost:${localPort}`);
+    origins.add(`http://127.0.0.1:${localPort}`);
+  }
+
   return Array.from(origins);
 }
 
-/** True when ngrok tunnel credentials are present in the environment. */
+/** @deprecated Use shouldEnableNgrokTunnel from appEnv */
 export function isNgrokConfigured(): boolean {
-  return Boolean(process.env.NGROK_AUTHTOKEN?.trim());
+  return shouldEnableNgrokTunnel();
 }
 
 /**
  * Applies the resolved public URL to runtime env vars used by NextAuth and clients.
- * Called after ngrok tunnel is established or on startup when BASE_URL is preset.
+ * Called after ngrok tunnel is established (staging only).
  */
 export function syncPublicUrlEnvironment(publicBaseUrl: string): void {
   const normalized = normalizeBaseUrl(publicBaseUrl);
@@ -70,8 +75,14 @@ export function getClientPublicAppBaseUrl(): string {
   return getPublicAppBaseUrl();
 }
 
-/** True when the current host is an ngrok domain (used for skip-browser-warning header). */
+/** True when the current host is an ngrok domain (staging tunnel access). */
 export function isNgrokHost(hostname?: string): boolean {
+  if (!isStagingEnvironment()) return false;
   const host = hostname ?? (typeof window !== "undefined" ? window.location.hostname : "");
   return host.includes("ngrok") || Boolean(process.env.NGROK_DOMAIN?.includes(host));
+}
+
+/** Human-readable label for logs and UI. */
+export function getEnvironmentLabel(): string {
+  return getAppEnvironment();
 }

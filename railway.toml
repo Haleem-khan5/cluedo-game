@@ -1,0 +1,19 @@
+# Railway — one Docker app + Postgres plugin
+# https://docs.railway.com/guides/deployments
+#
+# 1. railway login && railway init
+# 2. Dashboard → New → Database → PostgreSQL
+# 3. railway secrets set AUTH_SECRET=$(openssl rand -base64 32)
+# 4. railway up
+#
+# BASE_URL auto-detects from RAILWAY_PUBLIC_DOMAIN
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/ping"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

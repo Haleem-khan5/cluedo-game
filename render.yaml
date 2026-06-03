@@ -1,0 +1,42 @@
+# Render — one app + Postgres (free tier)
+# https://render.com/docs/blueprint-spec
+#
+# 1. Push to GitHub
+# 2. Render → New → Blueprint → select repo
+# 3. Deploy — BASE_URL auto-detects from RENDER_EXTERNAL_URL
+#    (optional: set NEXT_PUBLIC_BASE_URL to same URL after first deploy)
+
+services:
+  - type: web
+    name: mystery-mansion
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/ping
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: NODE_ENV
+        value: production
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mystery-mansion-db
+          property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+      # Optional — auto-detected from RENDER_EXTERNAL_URL if omitted:
+      - key: BASE_URL
+        sync: false
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false
+
+databases:
+  - name: mystery-mansion-db
+    plan: free
+    databaseName: mystery_mansion
+    user: mystery_mansion

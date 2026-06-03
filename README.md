@@ -42,13 +42,15 @@ A production-ready online murder mystery board game built with **Next.js 16**, *
 npm install
 ```
 
-### 2. Set up environment
+### 2. Set up environment (staging)
 
 ```bash
-cp .env.example .env
+cp .env.staging.example .env
 ```
 
-Edit `.env` and set `AUTH_SECRET` (generate with `openssl rand -base64 32`).
+Edit `.env`: set `AUTH_SECRET` and optionally `NGROK_AUTHTOKEN` for public sharing.
+
+> `APP_ENV=staging` — ngrok only runs in staging, never in production.
 
 ### 3. Start PostgreSQL
 
@@ -69,15 +71,30 @@ npx prisma generate
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3001](http://localhost:3001).
 
 > **Note:** The dev server uses a custom Node.js server (`server.ts`) that runs both Next.js and the Socket.IO WebSocket handler on the same port.
 
-## Public access with ngrok
+## Deploy (production — one app)
 
-Share the game with friends over the internet using [ngrok](https://ngrok.com/). When `NGROK_AUTHTOKEN` is set in `.env`, the tunnel starts automatically with `npm run dev`.
+**Staging** = local (`npm run dev`). **Production** = one Docker app on a free host.
 
-### 1. Add ngrok variables to `.env`
+| Platform | Quick start |
+|----------|-------------|
+| **Render** | Push to GitHub → New Blueprint → uses `render.yaml` |
+| **Railway** | `railway init` → add Postgres → `railway up` |
+| **Fly.io** | `fly launch` → attach Postgres → `fly deploy` |
+| **Docker** | `npm run docker:deploy` |
+
+Full guide: **[DEPLOY.md](./DEPLOY.md)**
+
+Not supported: Vercel / Netlify (no Socket.IO server).
+
+## Public access with ngrok (staging only)
+
+Share the game with friends while developing locally. ngrok **only runs when `APP_ENV=staging`** — production ignores it.
+
+### 1. Add ngrok to `.env` (staging)
 
 ```env
 BASE_URL=https://your-subdomain.ngrok-free.dev
@@ -106,7 +123,7 @@ npm run dev
 You'll see output like:
 
 ```
-> Mystery Mansion ready on http://localhost:3000
+> Mystery Mansion ready on http://localhost:3001
 > ngrok tunnel active
 > Public URL:  https://your-subdomain.ngrok-free.dev
 > Share this URL with friends to play online
@@ -129,7 +146,7 @@ https://your-subdomain.ngrok-free.dev/api/auth/callback/google
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create OAuth 2.0 credentials (Web application)
-3. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+3. Add authorized redirect URI: `http://localhost:3001/api/auth/callback/google`
 4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
 
 ## Scripts

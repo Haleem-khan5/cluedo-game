@@ -1,0 +1,39 @@
+# Fly.io — one Docker app (free allowance)
+# https://fly.io/docs/languages-and-frameworks/nextjs/
+#
+# fly launch --copy-config --no-deploy
+# fly postgres create && fly postgres attach
+# fly secrets set AUTH_SECRET=$(openssl rand -base64 32)
+# fly deploy
+
+app = "mystery-mansion"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  NODE_ENV = "production"
+  HOSTNAME = "0.0.0.0"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/ping"
+    timeout = "5s"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

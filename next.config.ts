@@ -1,8 +1,11 @@
-import "dotenv/config";
+import "./env/load";
 import type { NextConfig } from "next";
+import { isStagingEnvironment } from "./src/lib/config/appEnv";
 
-/** Hostnames allowed to use Next.js dev HMR when accessed via ngrok. */
+/** Hostnames allowed to use Next.js dev HMR when accessed via ngrok (staging only). */
 function getNgrokDevOrigins(): string[] {
+  if (!isStagingEnvironment()) return [];
+
   const reservedDomain = process.env.NGROK_DOMAIN?.trim();
   if (reservedDomain) return [reservedDomain];
 

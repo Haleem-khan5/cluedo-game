@@ -1,15 +1,24 @@
-import "dotenv/config";
+import "./env/load";
 import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { initSocketServer } from "./server/socket";
-import { startNgrokTunnel, logPresetPublicUrl } from "./server/ngrokTunnel";
+import { startNgrokTunnel, logPublicUrlConfiguration } from "./server/ngrokTunnel";
 import { ensureDatabaseReady } from "./server/dbInit";
-import { getPublicAppBaseUrl, isNgrokConfigured } from "@/lib/config/publicAppUrl";
+import { getPublicAppBaseUrl } from "@/lib/config/publicAppUrl";
+import {
+  getAppEnvironment,
+  isStagingEnvironment,
+  shouldEnableNgrokTunnel,
+  validateProductionEnvironment,
+} from "@/lib/config/appEnv";
 
-const isDevMode = process.env.NODE_ENV !== "production";
-const serverHostname = process.env.HOSTNAME ?? "localhost";
-const serverPort = parseInt(process.env.PORT ?? "3000", 10);
+const appEnvironment = getAppEnvironment();
+const isDevMode = appEnvironment === "staging";
+const serverHostname =
+  process.env.HOSTNAME ??
+  (appEnvironment === "production" ? "0.0.0.0" : "localhost");
+const serverPort = parseInt(process.env.PORT ?? "3001", 10);
 
 const nextApp = next({ dev: isDevMode, hostname: serverHostname, port: serverPort });
 const handleNextRequest = nextApp.getRequestHandler();
@@ -29,6 +38,12 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 nextApp.prepare().then(async () => {
+  console.log(`> Environment: ${appEnvironment}`);
+
+  for (const warning of validateProductionEnvironment()) {
+    console.warn(`> WARNING: ${warning}`);
+  }
+
   try {
     await ensureDatabaseReady();
   } catch {
@@ -45,7 +60,7 @@ nextApp.prepare().then(async () => {
   httpServer.listen(serverPort, async () => {
     console.log(`> Mystery Mansion ready on http://${serverHostname}:${serverPort}`);
 
-    if (isNgrokConfigured()) {
+    if (shouldEnableNgrokTunnel()) {
       try {
         const tunnel = await startNgrokTunnel(serverPort);
         if (tunnel) {
@@ -56,11 +71,10 @@ nextApp.prepare().then(async () => {
         console.error("> Continuing on localhost only. Check NGROK_AUTHTOKEN and NGROK_DOMAIN.");
       }
     } else {
-      logPresetPublicUrl();
-    }
-
-    if (!isNgrokConfigured() && !process.env.BASE_URL) {
-      console.log("> Local only — set NGROK_AUTHTOKEN in .env for public access");
+      logPublicUrlConfiguration();
+      if (isStagingEnvironment()) {
+        console.log("> [staging] Local only — add NGROK_AUTHTOKEN to .env for public access");
+      }
     }
 
     console.log(`> Auth callback URL: ${getPublicAppBaseUrl()}/api/auth/callback/google`);
