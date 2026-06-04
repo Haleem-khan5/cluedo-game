@@ -98,11 +98,16 @@ function emitGameState(
 
     const sanitized = sanitizeStateForPlayer(game.state, player.id);
     const revealed = game.revealedCards.get(player.id);
+    const revealedToThisPlayer = revealed?.toPlayerId === player.id ? revealed : undefined;
+    const revealedByUserId = revealedToThisPlayer
+      ? game.state.players.find((p) => p.id === revealedToThisPlayer.fromPlayerId)?.userId
+      : undefined;
 
     io.to(socketId).emit("game:state", {
       ...sanitized,
       hand: player.hand,
-      revealedCard: revealed?.toPlayerId === player.id ? revealed.card : undefined,
+      revealedCard: revealedToThisPlayer?.card,
+      revealedByUserId,
     });
   }
 
@@ -438,7 +443,11 @@ export function initSocketServer(httpServer: HttpServer) {
       if (result.revealedTo) {
         const suggester = game.state.players.find((p) => p.id === result.revealedTo);
         if (suggester) {
-          game.revealedCards.set(suggester.id, { card, toPlayerId: suggester.id });
+          game.revealedCards.set(suggester.id, {
+            card,
+            toPlayerId: suggester.id,
+            fromPlayerId: player.id,
+          });
         }
       }
       emitGameState(io, game);

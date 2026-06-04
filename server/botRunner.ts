@@ -110,7 +110,11 @@ async function resolveBotDisproveChain(game: ActiveGame, emit: () => void): Prom
           const brain = getBotBrain(game, suggester.userId, suggester.hand);
           recordRevealedCard(brain, card, disprover.userId);
         }
-        game.revealedCards.set(suggester!.id, { card, toPlayerId: suggester!.id });
+        game.revealedCards.set(suggester!.id, {
+          card,
+          toPlayerId: suggester!.id,
+          fromPlayerId: disprover.id,
+        });
       }
     } else {
       observeInterrogation(

@@ -105,6 +105,29 @@ describe("Game Engine", () => {
       expect(accused.state.turnIndex).toBe(1);
       expect(accused.state.phase).toBe("turn");
     });
+
+    it("last detective standing wins when all others accuse wrongly", () => {
+      const { state } = initializeGame("session1", "ABC123", players, solution);
+      const afterP1 = makeAccusation(
+        state,
+        "p1",
+        "Lady Violet",
+        "Poison Bottle",
+        "Kitchen",
+        solution
+      ).state;
+      const afterP2 = makeAccusation(
+        afterP1,
+        "p2",
+        "Lady Violet",
+        "Poison Bottle",
+        "Kitchen",
+        solution
+      ).state;
+
+      expect(afterP2.status).toBe("finished");
+      expect(afterP2.winnerId).toBe("p3");
+    });
   });
 
   describe("getMatchingCards", () => {

@@ -22,7 +22,7 @@ export interface ActiveGame {
   solution: GameSolution;
   lobbyId: string;
   playerSocketMap: Map<string, string>;
-  revealedCards: Map<string, { card: string; toPlayerId: string }>;
+  revealedCards: Map<string, { card: string; toPlayerId: string; fromPlayerId: string }>;
   botUserIds: Set<string>;
   botBrains: Map<string, BotBrain>;
 }
