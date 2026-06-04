@@ -46,7 +46,14 @@ interface MultiplayerGameStore {
   resetMultiplayerState: () => void;
 }
 
-const GRID_MARK_CYCLE: GridCellMark[] = ["empty", "yes", "no", "maybe"];
+const GRID_MARK_CYCLE: GridCellMark[] = [
+  "empty",
+  "yes",
+  "no",
+  "asked",
+  "shown",
+  "both",
+];
 
 export function gridMarkKey(playerUserId: string, cardName: string): string {
   return `${playerUserId}::${cardName}`;

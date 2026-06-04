@@ -61,8 +61,17 @@ export type LiveGameClientState = GameState & {
 /** Deduction mark on the detective notes sheet. */
 export type DetectiveNoteMark = "unknown" | "maybe" | "ruled-out" | "confirmed";
 
-/** Per-player grid cell mark — cycles on click. */
-export type GridCellMark = "empty" | "yes" | "no" | "maybe" | "has";
+/** Per-player grid cell mark — cycles on click.
+ * yes ✓ has it · no ✗ ruled out · asked ? they asked about it ·
+ * shown ! shown/asked for it · both ?! asked about it AND asked for it · has = locked (own/revealed). */
+export type GridCellMark =
+  | "empty"
+  | "yes"
+  | "no"
+  | "asked"
+  | "shown"
+  | "both"
+  | "has";
 
 /** Key: `${playerUserId}::${cardName}` */
 export type PlayerGridMarks = Record<string, GridCellMark>;

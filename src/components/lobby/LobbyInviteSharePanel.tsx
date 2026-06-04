@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { motion } from "framer-motion";
-import { Copy, Check, Link2, Share2, MessageCircle } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Copy, Check, Share2, MessageCircle, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   buildLobbyInviteUrl,
@@ -18,26 +18,29 @@ export function LobbyInviteSharePanel({ lobbyInviteCode }: LobbyInviteSharePanel
   const [didCopyLink, setDidCopyLink] = useState(false);
   const [didCopyCode, setDidCopyCode] = useState(false);
   const [didCopyMessage, setDidCopyMessage] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   const inviteUrl = buildLobbyInviteUrl(lobbyInviteCode);
   const shareMessage = buildLobbyShareMessage(lobbyInviteCode);
 
+  const flash = (setter: (v: boolean) => void) => {
+    setter(true);
+    setTimeout(() => setter(false), 2000);
+  };
+
   const copyInviteLink = async () => {
     await navigator.clipboard.writeText(inviteUrl);
-    setDidCopyLink(true);
-    setTimeout(() => setDidCopyLink(false), 2500);
+    flash(setDidCopyLink);
   };
 
   const copyLobbyCode = async () => {
     await navigator.clipboard.writeText(lobbyInviteCode.toUpperCase());
-    setDidCopyCode(true);
-    setTimeout(() => setDidCopyCode(false), 2500);
+    flash(setDidCopyCode);
   };
 
   const copyFullShareMessage = async () => {
     await navigator.clipboard.writeText(shareMessage);
-    setDidCopyMessage(true);
-    setTimeout(() => setDidCopyMessage(false), 2500);
+    flash(setDidCopyMessage);
   };
 
   const openNativeShare = async () => {
@@ -57,62 +60,85 @@ export function LobbyInviteSharePanel({ lobbyInviteCode }: LobbyInviteSharePanel
   };
 
   return (
-    <div className="rounded-xl border border-cream/10 bg-mansion-dark/50 p-4 space-y-4">
-      <h3 className="font-serif text-base text-cream">Invite</h3>
-
-      <div className="grid sm:grid-cols-[auto_1fr] gap-4 items-start">
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="mx-auto p-3 rounded-xl bg-white shadow-md"
+    <div className="rounded-xl border border-cream/10 bg-mansion-dark/50 p-3">
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Code — tap to copy */}
+        <button
+          onClick={copyLobbyCode}
+          className="flex items-center gap-2 group min-w-0"
+          aria-label="Copy invite code"
         >
-          <QRCodeSVG value={inviteUrl} size={140} level="M" includeMargin />
-        </motion.div>
+          <span className="text-[10px] uppercase tracking-wider text-cream/40 shrink-0">
+            Code
+          </span>
+          <span className="text-2xl font-mono tracking-[0.18em] text-gold font-bold leading-none">
+            {lobbyInviteCode.toUpperCase()}
+          </span>
+          <span className="p-1 rounded-md text-cream/40 group-hover:text-cream/80 group-hover:bg-cream/10 shrink-0">
+            {didCopyCode ? (
+              <Check className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </span>
+        </button>
 
-        <div className="space-y-3 min-w-0">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-cream/40 mb-1">Code</p>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-mono tracking-[0.2em] text-gold font-bold">
-                {lobbyInviteCode.toUpperCase()}
-              </span>
-              <button
-                onClick={copyLobbyCode}
-                className="p-1.5 rounded-lg hover:bg-cream/10 text-cream/60"
-                aria-label="Copy code"
-              >
-                {didCopyCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-cream/40 mb-1">Link</p>
-            <div className="flex gap-2">
-              <div className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-mansion-card border border-cream/10 text-xs text-cream/70 truncate flex items-center gap-2">
-                <Link2 className="w-3.5 h-3.5 shrink-0 text-gold" />
-                <span className="truncate">{inviteUrl}</span>
-              </div>
-              <Button variant="ghost" size="sm" onClick={copyInviteLink} aria-label="Copy link">
-                {didCopyLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={openNativeShare}>
-              <Share2 className="w-4 h-4" /> Share
-            </Button>
-            <Button variant="ghost" size="sm" onClick={copyFullShareMessage}>
-              {didCopyMessage ? (
-                <><Check className="w-4 h-4 text-emerald-400" /> Copied</>
-              ) : (
-                <><MessageCircle className="w-4 h-4" /> Copy text</>
-              )}
-            </Button>
-          </div>
+        {/* Actions */}
+        <div className="flex items-center gap-2 ml-auto">
+          <Button variant="secondary" size="sm" onClick={openNativeShare}>
+            <Share2 className="w-4 h-4" /> Share
+          </Button>
+          <Button variant="ghost" size="sm" onClick={copyInviteLink} aria-label="Copy link">
+            {didCopyLink ? (
+              <><Check className="w-4 h-4 text-emerald-400" /> Link</>
+            ) : (
+              <><Copy className="w-4 h-4" /> Link</>
+            )}
+          </Button>
+          <button
+            onClick={() => setShowQr((v) => !v)}
+            className={`p-2 rounded-lg border transition-colors ${
+              showQr
+                ? "border-gold/40 bg-gold/10 text-gold"
+                : "border-cream/15 text-cream/55 hover:text-cream hover:bg-cream/5"
+            }`}
+            aria-label="Toggle QR code"
+            aria-pressed={showQr}
+          >
+            <QrCode className="w-4 h-4" />
+          </button>
         </div>
       </div>
+
+      <AnimatePresence initial={false}>
+        {showQr && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 mt-3 border-t border-cream/10">
+              <div className="p-2.5 rounded-xl bg-white shadow-md shrink-0">
+                <QRCodeSVG value={inviteUrl} size={104} level="M" includeMargin />
+              </div>
+              <div className="min-w-0 w-full space-y-2 text-center sm:text-left">
+                <p className="text-xs text-cream/50">Scan to join, or send the link:</p>
+                <div className="px-3 py-2 rounded-lg bg-mansion-card border border-cream/10 text-xs text-cream/70 truncate">
+                  {inviteUrl}
+                </div>
+                <Button variant="ghost" size="sm" onClick={copyFullShareMessage}>
+                  {didCopyMessage ? (
+                    <><Check className="w-4 h-4 text-emerald-400" /> Copied invite</>
+                  ) : (
+                    <><MessageCircle className="w-4 h-4" /> Copy invite text</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

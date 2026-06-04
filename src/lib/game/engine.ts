@@ -389,15 +389,20 @@ export function makeAccusation(
   );
 
   const activePlayers = players.filter((p) => !p.isEliminated);
-  if (activePlayers.length === 0) {
+
+  // Last detective standing wins by default (we never reveal the wrong accuser's cards).
+  if (activePlayers.length <= 1) {
+    const lastOne = activePlayers[0] ?? null;
     return {
       state: {
         ...state,
         players,
         status: "finished",
-        winnerId: null,
+        winnerId: lastOne ? lastOne.id : null,
         pendingSuggestion: null,
-        lastAction: `${current.displayName} accused wrongly. No one wins!`,
+        lastAction: lastOne
+          ? `${current.displayName} accused wrongly and is out. ${lastOne.displayName} wins as the last detective standing!`
+          : `${current.displayName} accused wrongly. No one wins!`,
       },
     };
   }

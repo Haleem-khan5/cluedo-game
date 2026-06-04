@@ -2,11 +2,10 @@
 
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
-import { Trophy, Search, Loader2, BookOpen } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Trophy, Search, Loader2, BookOpen, Frown, PartyPopper } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 import { useMultiplayerGameStore } from "@/store/multiplayerGameStore";
-import { useToastStore } from "@/components/ui/ToastContainer";
 import { DeductionGrid } from "@/components/game/DeductionGrid";
 import { TurnActionPanel } from "@/components/game/TurnActionPanel";
 import { RulesModal } from "@/components/guide/RulesModal";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PLAYER_COLORS, type Card } from "@/lib/game/constants";
 import type { GameState } from "@/lib/game/engine";
+import { shortPlayerName } from "@/lib/game/playerName";
 import type { LiveGameClientState } from "@/types/multiplayer.types";
 
 function mapSocketPayloadToClientState(
@@ -54,9 +54,10 @@ export default function LiveGamePage() {
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [revealedCardsByPlayer, setRevealedCardsByPlayer] = useState<Record<string, Set<Card>>>({});
+  const [acknowledgedClue, setAcknowledgedClue] = useState<Card | null>(null);
+  const [showEliminatedNotice, setShowEliminatedNotice] = useState(false);
+  const eliminatedNoticeShownRef = useRef(false);
   const [turnSecondsLeft, setTurnSecondsLeft] = useState(TURN_SECONDS);
-  const showToast = useToastStore((s) => s.showToast);
-  const previousLastActionRef = useMemo(() => ({ current: "" }), []);
 
   useEffect(() => {
     if (authStatus === "unauthenticated") router.push("/auth/login");
@@ -74,18 +75,22 @@ export default function LiveGamePage() {
 
   useEffect(() => {
     const unsubState = on("game:state", (payload) => {
-      const mapped = mapSocketPayloadToClientState(payload as GameState & { hand?: Card[]; revealedCard?: Card });
+      const raw = payload as GameState & {
+        hand?: Card[];
+        revealedCard?: Card;
+        revealedByUserId?: string;
+      };
+      const mapped = mapSocketPayloadToClientState(raw);
       setLiveGameState(mapped);
-      if (mapped.privatelyRevealedCard) {
+      // Mark the revealed card only in the column of the player who revealed it.
+      if (raw.revealedCard && raw.revealedByUserId) {
+        const card = raw.revealedCard;
+        const revealerUserId = raw.revealedByUserId;
         setRevealedCardsByPlayer((prev) => {
-          const next = { ...prev };
-          for (const player of mapped.players) {
-            if (player.userId !== authenticatedUserId) {
-              if (!next[player.userId]) next[player.userId] = new Set();
-              next[player.userId].add(mapped.privatelyRevealedCard!);
-            }
-          }
-          return next;
+          if (prev[revealerUserId]?.has(card)) return prev;
+          const nextSet = new Set(prev[revealerUserId] ?? []);
+          nextSet.add(card);
+          return { ...prev, [revealerUserId]: nextSet };
         });
       }
     });
@@ -135,13 +140,6 @@ export default function LiveGamePage() {
     };
   }, [on, setLiveGameState, setPendingDisproveRequest, setRevealedMurderSolution, authenticatedUserId]);
 
-  useEffect(() => {
-    if (liveGameState?.lastAction && liveGameState.lastAction !== previousLastActionRef.current) {
-      previousLastActionRef.current = liveGameState.lastAction;
-      showToast(liveGameState.lastAction, "info");
-    }
-  }, [liveGameState?.lastAction, showToast, previousLastActionRef]);
-
   // Per-turn countdown — resets whenever the active turn changes.
   const turnTimerKey = `${liveGameState?.turnIndex ?? -1}-${liveGameState?.phase ?? "none"}`;
   const isActiveTurnPhase = liveGameState?.phase === "turn";
@@ -159,6 +157,19 @@ export default function LiveGamePage() {
     return () => clearInterval(id);
   }, [turnTimerKey, isActiveTurnPhase]);
 
+  // Notify this player once when their wrong accusation eliminates them (game continues for others).
+  useEffect(() => {
+    const me = liveGameState?.players.find((p) => p.userId === authenticatedUserId);
+    if (
+      me?.isEliminated &&
+      liveGameState?.status === "playing" &&
+      !eliminatedNoticeShownRef.current
+    ) {
+      eliminatedNoticeShownRef.current = true;
+      setShowEliminatedNotice(true);
+    }
+  }, [liveGameState?.players, liveGameState?.status, authenticatedUserId]);
+
   const emitGameAction = async <T extends { success: boolean; error?: string }>(
     eventName: string,
     payload: Record<string, unknown>,
@@ -172,7 +183,6 @@ export default function LiveGamePage() {
     if (!result.success) {
       const message = result.error ?? fallbackError;
       setGameActionErrorMessage(message);
-      showToast(message, "error");
     } else {
       setSelectedSuspect(null);
       setSelectedWeapon(null);
@@ -196,6 +206,7 @@ export default function LiveGamePage() {
     isViewingPlayersTurnCheck(liveGameState, authenticatedUserId);
   const privateHandCards = liveGameState.privateHandCards ?? [];
   const winningPlayer = liveGameState.players.find((p) => p.id === liveGameState.winnerId);
+  const didIWin = !!winningPlayer && winningPlayer.userId === authenticatedUserId;
 
   const interrogatorName = liveGameState.pendingSuggestion
     ? liveGameState.players.find((p) => p.id === liveGameState.pendingSuggestion!.suggesterId)
@@ -203,6 +214,12 @@ export default function LiveGamePage() {
     : "";
 
   const pendingSuggestion = liveGameState.pendingSuggestion;
+
+  const askSequence =
+    pendingSuggestion && liveGameState.phase === "disprove"
+      ? buildAskSequence(liveGameState, pendingSuggestion, authenticatedUserId)
+      : undefined;
+
   const activeInterrogation =
     pendingSuggestion && liveGameState.phase === "disprove"
       ? {
@@ -212,8 +229,19 @@ export default function LiveGamePage() {
           suspect: pendingSuggestion.suspect,
           room: pendingSuggestion.room,
           weapon: pendingSuggestion.weapon,
+          askSequence,
         }
       : undefined;
+
+  const statusMessage = liveGameState.lastAction ?? undefined;
+
+  const handleRevealCard = (card: Card) => {
+    emitGameAction(
+      "game:disprove",
+      { sessionId: activeGameSessionId, userId: authenticatedUserId, card },
+      "Reveal failed"
+    ).then(() => setPendingDisproveRequest(null));
+  };
 
   return (
     <div className="min-h-[calc(100vh-57px)]">
@@ -243,8 +271,8 @@ export default function LiveGamePage() {
           </div>
         )}
 
-        <div className="flex flex-col xl:flex-row xl:justify-center gap-3 xl:gap-6 items-start">
-          <div className="w-full xl:w-fit min-w-0">
+        <div className="flex flex-col xl:flex-row gap-3 xl:gap-4 items-start">
+          <div className="w-full xl:flex-1 min-w-0">
             <DeductionGrid
               liveGameState={liveGameState}
               currentUserId={authenticatedUserId}
@@ -257,10 +285,23 @@ export default function LiveGamePage() {
               onSelectWeapon={setSelectedWeapon}
               isSelectionEnabled={isViewingPlayersTurn && liveGameState.phase === "turn"}
               revealedCardsByPlayer={revealedCardsByPlayer}
+              revealPrompt={
+                pendingDisproveRequest
+                  ? {
+                      askedCards: [
+                        pendingDisproveRequest.suggestion.suspectName,
+                        pendingDisproveRequest.suggestion.roomName,
+                        pendingDisproveRequest.suggestion.weaponName,
+                      ] as Card[],
+                      matchingCards: pendingDisproveRequest.matchingCardsInHand,
+                    }
+                  : undefined
+              }
+              onRevealCard={pendingDisproveRequest ? handleRevealCard : undefined}
             />
           </div>
 
-          <div className="w-full xl:w-[380px] xl:shrink-0 xl:sticky xl:top-[57px]">
+          <div className="w-full xl:w-[360px] xl:shrink-0 xl:sticky xl:top-[57px]">
             {pendingDisproveRequest ? (
               <TurnActionPanel
                 isYourTurn={false}
@@ -278,13 +319,7 @@ export default function LiveGamePage() {
                   room: pendingDisproveRequest.suggestion.roomName,
                   weapon: pendingDisproveRequest.suggestion.weaponName,
                   matchingCards: pendingDisproveRequest.matchingCardsInHand,
-                  onReveal: (card) => {
-                    emitGameAction(
-                      "game:disprove",
-                      { sessionId: activeGameSessionId, userId: authenticatedUserId, card },
-                      "Reveal failed"
-                    ).then(() => setPendingDisproveRequest(null));
-                  },
+                  onReveal: handleRevealCard,
                   onPass: () => {
                     emitGameAction(
                       "game:passDisprove",
@@ -303,7 +338,16 @@ export default function LiveGamePage() {
                 selectedWeapon={selectedWeapon}
                 canAccuse={viewingPlayerState?.canAccuse ?? false}
                 isLoading={isGameActionLoading}
-                revealedCard={liveGameState.privatelyRevealedCard}
+                revealedCard={
+                  liveGameState.privatelyRevealedCard &&
+                  liveGameState.privatelyRevealedCard !== acknowledgedClue
+                    ? liveGameState.privatelyRevealedCard
+                    : null
+                }
+                onAcknowledgeReveal={() =>
+                  setAcknowledgedClue(liveGameState.privatelyRevealedCard ?? null)
+                }
+                statusMessage={statusMessage}
                 activeInterrogation={activeInterrogation}
                 turnProgress={
                   liveGameState.phase === "turn"
@@ -349,14 +393,34 @@ export default function LiveGamePage() {
       <Modal
         open={isGameOverModalOpen || liveGameState.status === "finished"}
         onClose={() => {}}
-        title="Game Over"
+        title={didIWin ? "Case Closed!" : "Game Over"}
         size="md"
       >
         <div className="text-center space-y-4">
-          {winningPlayer ? (
+          {didIWin ? (
             <>
-              <Trophy className="w-14 h-14 text-gold mx-auto" />
-              <p className="text-xl font-serif text-cream">{winningPlayer.displayName} wins!</p>
+              <div className="relative mx-auto w-16 h-16">
+                <Trophy className="w-16 h-16 text-gold mx-auto drop-shadow-lg" />
+                <PartyPopper className="w-6 h-6 text-emerald-400 absolute -top-1 -right-1" />
+              </div>
+              <div>
+                <p className="text-2xl font-serif text-gold">You cracked the case!</p>
+                <p className="text-sm text-cream/60 mt-1">
+                  Masterful detective work — the mystery is yours.
+                </p>
+              </div>
+            </>
+          ) : winningPlayer ? (
+            <>
+              <Trophy className="w-14 h-14 text-gold/80 mx-auto" />
+              <div>
+                <p className="text-xl font-serif text-cream">
+                  {winningPlayer.displayName} solved it
+                </p>
+                <p className="text-sm text-cream/55 mt-1">
+                  So close, detective — try your skills next time.
+                </p>
+              </div>
             </>
           ) : (
             <>
@@ -366,7 +430,7 @@ export default function LiveGamePage() {
           )}
           {revealedMurderSolution && (
             <div className="p-4 rounded-xl bg-mansion-dark/60 border border-cream/10 text-left space-y-1 text-sm">
-              <p className="text-cream/45 text-xs uppercase">Solution</p>
+              <p className="text-cream/45 text-xs uppercase">The solution was</p>
               <p className="text-cream">👤 {revealedMurderSolution.suspectName}</p>
               <p className="text-cream">🗡️ {revealedMurderSolution.weaponName}</p>
               <p className="text-cream">🏠 {revealedMurderSolution.roomName}</p>
@@ -384,6 +448,43 @@ export default function LiveGamePage() {
           </Button>
         </div>
       </Modal>
+
+      <Modal
+        open={showEliminatedNotice && liveGameState.status === "playing"}
+        onClose={() => setShowEliminatedNotice(false)}
+        title="You're out"
+        size="sm"
+      >
+        <div className="text-center space-y-4">
+          <Frown className="w-14 h-14 text-red-400/80 mx-auto" />
+          <div>
+            <p className="text-lg font-serif text-cream">That accusation was wrong</p>
+            <p className="text-sm text-cream/55 mt-1">
+              You&apos;re eliminated — but your guess stays secret. Better luck next time! You can
+              keep watching how it unfolds.
+            </p>
+          </div>
+          <div className="flex gap-2.5">
+            <Button
+              variant="ghost"
+              className="flex-1"
+              onClick={() => setShowEliminatedNotice(false)}
+            >
+              Keep watching
+            </Button>
+            <Button
+              variant="gold"
+              className="flex-1"
+              onClick={() => {
+                resetMultiplayerState();
+                router.push("/lobby");
+              }}
+            >
+              Leave
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -391,4 +492,43 @@ export default function LiveGamePage() {
 function isViewingPlayersTurnCheck(state: GameState, userId?: string): boolean {
   if (!userId || state.phase !== "turn") return false;
   return state.players[state.turnIndex]?.userId === userId;
+}
+
+export interface AskSequenceEntry {
+  name: string;
+  status: "passed" | "asking" | "waiting";
+  isYou: boolean;
+}
+
+/** Order in which the interrogator asks others to disprove (clockwise from the asker). */
+function buildAskSequence(
+  state: GameState,
+  pending: { suggesterId: string; disproveIndex: number },
+  viewerUserId?: string
+): AskSequenceEntry[] {
+  const players = state.players;
+  const suggesterIndex = players.findIndex((p) => p.id === pending.suggesterId);
+  if (suggesterIndex < 0) return [];
+
+  const order: number[] = [];
+  for (let step = 1; step < players.length; step++) {
+    const idx = (suggesterIndex + step) % players.length;
+    if (!players[idx].isEliminated) order.push(idx);
+  }
+
+  const currentPos = order.indexOf(pending.disproveIndex);
+  return order.map((idx, pos) => {
+    const player = players[idx];
+    const status: AskSequenceEntry["status"] =
+      currentPos < 0 || pos < currentPos
+        ? "passed"
+        : pos === currentPos
+          ? "asking"
+          : "waiting";
+    return {
+      name: shortPlayerName(player.displayName),
+      status,
+      isYou: player.userId === viewerUserId,
+    };
+  });
 }
