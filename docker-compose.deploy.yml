@@ -12,11 +12,11 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mystery_mansion
+      POSTGRES_DB: cluebound_chronicles
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d mystery_mansion"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cluebound_chronicles"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -35,7 +35,7 @@ services:
       APP_ENV: production
       PORT: 3001
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mystery_mansion?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cluebound_chronicles?schema=public
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3001}
       BASE_URL: ${BASE_URL:-http://localhost:3001}

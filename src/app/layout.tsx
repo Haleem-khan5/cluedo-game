@@ -24,11 +24,15 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Mystery Mansion — Online Murder Mystery Game",
+  title: "Cluebound Chronicles — Online Murder Mystery Game",
   description:
-    "Play Mystery Mansion online with 3-6 detectives. Roll dice, explore the mansion, make suggestions, and solve the murder mystery.",
+    "Play Cluebound Chronicles online with 3-6 detectives. Follow clues, question suspects, make suggestions, and solve the murder mystery.",
   keywords: ["murder mystery", "board game", "multiplayer", "detective", "online game"],
-  appleWebApp: { capable: true, title: "Mystery Mansion" },
+  appleWebApp: { capable: true, title: "Cluebound Chronicles" },
+  icons: {
+    icon: "/cluebound-chronicles-portfolio-logo.png",
+    apple: "/cluebound-chronicles-portfolio-logo.png",
+  },
 };
 
 export const viewport: Viewport = {

@@ -67,7 +67,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const user = await prisma.user.create({
             data: {
               name,
-              email: `${guestId}@guest.mysterymansion.local`,
+              email: `${guestId}@guest.clueboundchronicles.local`,
               isGuest: true,
             },
           });

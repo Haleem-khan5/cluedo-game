@@ -92,7 +92,7 @@ export default function SignupPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="detective@mansion.com"
+              placeholder="detective@clueboundchronicles.com"
               required
             />
             <Input

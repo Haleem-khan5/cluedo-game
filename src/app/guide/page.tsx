@@ -4,8 +4,8 @@ import { GameGuidebook, GuidebookTableOfContents } from "@/components/guide/Game
 import { guidebookSections } from "@/lib/game/guidebookContent";
 
 export const metadata = {
-  title: "Guidebook — Mystery Mansion",
-  description: "Complete rules and strategy guide for Mystery Mansion murder mystery game.",
+  title: "Guidebook — Cluebound Chronicles",
+  description: "Complete rules and strategy guide for Cluebound Chronicles murder mystery game.",
 };
 
 export default function GuidebookPage() {
@@ -22,7 +22,7 @@ export default function GuidebookPage() {
             href="/lobby"
             className="inline-flex items-center gap-2 mt-6 text-gold hover:underline text-sm"
           >
-            <Castle className="w-4 h-4" /> Ready? Enter the Mansion
+            <Castle className="w-4 h-4" /> Ready? Open the Case
           </Link>
         </div>
       </div>

@@ -19,5 +19,5 @@ export function buildLobbyInviteUrl(lobbyInviteCode: string, baseUrlOverride?: s
 /** Human-readable share message for copy / native share sheet. */
 export function buildLobbyShareMessage(lobbyInviteCode: string, baseUrlOverride?: string): string {
   const inviteUrl = buildLobbyInviteUrl(lobbyInviteCode, baseUrlOverride);
-  return `Join my Mystery Mansion game!\n\nCode: ${lobbyInviteCode.toUpperCase()}\nLink: ${inviteUrl}`;
+  return `Join my Cluebound Chronicles game!\n\nCode: ${lobbyInviteCode.toUpperCase()}\nLink: ${inviteUrl}`;
 }

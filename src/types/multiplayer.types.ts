@@ -1,5 +1,5 @@
 /**
- * Shared multiplayer types for Mystery Mansion.
+ * Shared multiplayer types for Cluebound Chronicles.
  * Each interface describes one slice of real-time lobby or in-game state.
  */
 
@@ -12,7 +12,7 @@ export interface WaitingLobbyPlayer {
   userId: string;
   /** Name shown on the board and in chat. */
   displayName: string;
-  /** Token color assigned in the mansion (burgundy, gold, etc.). */
+  /** Token color assigned to the detective (burgundy, gold, etc.). */
   tokenColorId: string;
   /** True when this player created the lobby. */
   isHost: boolean;

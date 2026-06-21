@@ -47,7 +47,7 @@ export function LobbyInviteSharePanel({ lobbyInviteCode }: LobbyInviteSharePanel
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Join Mystery Mansion",
+          title: "Join Cluebound Chronicles",
           text: shareMessage,
           url: inviteUrl,
         });

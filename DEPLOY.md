@@ -1,4 +1,4 @@
-# Deploy Mystery Mansion (one application)
+# Deploy Cluebound Chronicles (one application)
 
 Deploy **one Docker app** with **PostgreSQL**. Staging stays on your laptop with optional ngrok; production never uses ngrok.
 
@@ -54,12 +54,12 @@ git push origin main
 
 1. Sign in at [render.com](https://render.com) (GitHub login is easiest).
 2. **Dashboard** → **New +** → **Blueprint**.
-3. Connect GitHub and select **`Haleem-khan5/cluedo-game`** (or your fork).
+3. Connect GitHub and select your **`cluebound-chronicles`** repository or fork.
 4. Render reads **`render.yaml`** at the repo root and shows:
-   - Web service **`mystery-mansion`** (Docker, free)
-   - Postgres **`mystery-mansion-db`** (free)
+   - Web service **`cluebound-chronicles`** (Docker, free)
+   - Postgres **`cluebound-chronicles-db`** (free)
 5. Click **Apply** / **Create Blueprint** and wait for the first deploy (~5–15 min).
-6. When the web service is **Live**, open its URL (e.g. `https://mystery-mansion-xxxx.onrender.com`).
+6. When the web service is **Live**, open its URL (e.g. `https://cluebound-chronicles-xxxx.onrender.com`).
 
 `AUTH_SECRET` and `DATABASE_URL` are set by the blueprint. `BASE_URL` / `NEXTAUTH_URL` are auto-detected from `RENDER_EXTERNAL_URL` unless you set them in the dashboard.
 

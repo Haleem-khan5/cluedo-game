@@ -1,4 +1,4 @@
-# Mystery Mansion — production image (Next.js + Socket.IO + Prisma)
+# Cluebound Chronicles — production image (Next.js + Socket.IO + Prisma)
 # Works on Render, Railway, Fly.io, and any Docker host.
 
 FROM node:20-bookworm-slim AS base
@@ -17,7 +17,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG NEXT_PUBLIC_BASE_URL=""
 ENV NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL
-ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mystery_mansion?schema=public"
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/cluebound_chronicles?schema=public"
 RUN npx prisma generate && npm run build
 
 FROM base AS runner

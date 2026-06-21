@@ -2,7 +2,7 @@
 export async function GET() {
   return Response.json({
     status: "ok",
-    app: "mystery-mansion",
+    app: "cluebound-chronicles",
     env: process.env.APP_ENV ?? "unknown",
   });
 }

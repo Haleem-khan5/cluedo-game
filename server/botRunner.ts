@@ -75,7 +75,7 @@ export async function createBotUser(displayName: string): Promise<{ id: string; 
   const user = await prisma.user.create({
     data: {
       name: displayName,
-      email: `${botKey}@bot.mysterymansion.local`,
+      email: `${botKey}@bot.clueboundchronicles.local`,
       isGuest: true,
     },
   });

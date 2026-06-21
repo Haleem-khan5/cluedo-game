@@ -58,7 +58,7 @@ nextApp.prepare().then(async () => {
   initSocketServer(httpServer);
 
   httpServer.listen(serverPort, async () => {
-    console.log(`> Mystery Mansion ready on http://${serverHostname}:${serverPort}`);
+    console.log(`> Cluebound Chronicles ready on http://${serverHostname}:${serverPort}`);
 
     if (shouldEnableNgrokTunnel()) {
       try {

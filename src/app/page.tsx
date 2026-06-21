@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { motion } from "framer-motion";
@@ -46,12 +47,19 @@ export default function HomePage() {
           transition={{ duration: 0.6 }}
           className="relative z-10 text-center max-w-2xl w-full"
         >
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gold/10 border border-gold/25 mb-6">
-            <Castle className="w-10 h-10 text-gold" />
+          <div className="inline-flex items-center justify-center w-28 h-28 rounded-2xl bg-gold/10 border border-gold/25 mb-6 p-2 shadow-lg shadow-gold/10">
+            <Image
+              src="/cluebound-chronicles-portfolio-logo.png"
+              alt="Cluebound Chronicles logo"
+              width={104}
+              height={104}
+              className="h-full w-full object-contain"
+              priority
+            />
           </div>
 
           <h1 className="font-serif text-5xl sm:text-6xl text-cream mb-3 leading-tight">
-            Mystery Mansion
+            Cluebound Chronicles
           </h1>
           <p className="text-lg text-cream/60 mb-8">
             Online murder mystery · 3–6 players · No account needed

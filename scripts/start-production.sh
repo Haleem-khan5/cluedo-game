@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "> Mystery Mansion — production start (port ${PORT:-3001})"
+echo "> Cluebound Chronicles — production start (port ${PORT:-3001})"
 
 if [ -n "$DATABASE_URL" ]; then
   echo "> Applying database migrations..."

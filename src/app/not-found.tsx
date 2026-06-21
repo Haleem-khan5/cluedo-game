@@ -8,7 +8,7 @@ export default function NotFoundPage() {
       <div className="text-center max-w-md">
         <Search className="w-14 h-14 text-cream/30 mx-auto mb-4" />
         <h1 className="font-serif text-4xl text-cream mb-2">404</h1>
-        <p className="text-cream/50 mb-6">This room of the mansion doesn&apos;t exist. The clue you seek is elsewhere.</p>
+        <p className="text-cream/50 mb-6">This chapter of the case file doesn&apos;t exist. The clue you seek is elsewhere.</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link href="/">
             <Button variant="gold">

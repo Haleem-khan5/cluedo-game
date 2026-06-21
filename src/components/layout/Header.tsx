@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -8,7 +9,6 @@ import { Button } from "@/components/ui/Button";
 import {
   LogOut,
   User,
-  Castle,
   Gamepad2,
   Sparkles,
   BookOpen,
@@ -50,10 +50,17 @@ export function Header() {
             onClick={() => setIsMobileMenuOpen(false)}
           >
             <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center group-hover:bg-gold/20 transition-colors shrink-0">
-              <Castle className="w-5 h-5 text-gold" />
+              <Image
+                src="/cluebound-chronicles-portfolio-logo.png"
+                alt="Cluebound Chronicles logo"
+                width={32}
+                height={32}
+                className="h-8 w-8 object-contain"
+                priority
+              />
             </div>
             <span className="font-serif text-lg sm:text-xl text-cream group-hover:text-gold transition-colors truncate hidden sm:block">
-              Mystery Mansion
+              Cluebound Chronicles
             </span>
           </Link>
         </div>

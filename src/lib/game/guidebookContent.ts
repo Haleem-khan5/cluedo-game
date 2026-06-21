@@ -22,7 +22,7 @@ export const guidebookSections: GuidebookSection[] = [
     content: [
       {
         type: "paragraph",
-        text: `Mystery Mansion is an online detective board game for ${MIN_PLAYERS}–${MAX_PLAYERS} players. A murder has occurred in the mansion. Your goal is to deduce three hidden facts: who did it, which weapon was used, and in which room.`,
+        text: `Cluebound Chronicles is an online detective board game for ${MIN_PLAYERS}–${MAX_PLAYERS} players. A murder case has gone cold, and your goal is to deduce three hidden facts: who did it, which weapon was used, and in which room.`,
       },
       {
         type: "list",
@@ -235,7 +235,7 @@ export const onboardingTourSteps = [
   },
   {
     id: "board",
-    title: "Mansion Board",
+    title: "Case Board",
     description: "Gold highlighted tiles show valid moves. Click a tile to move your token after rolling.",
     target: "tour-board",
   },

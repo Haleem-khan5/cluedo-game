@@ -6,7 +6,7 @@
 # fly secrets set AUTH_SECRET=$(openssl rand -base64 32)
 # fly deploy
 
-app = "mystery-mansion"
+app = "cluebound-chronicles"
 primary_region = "iad"
 
 [build]

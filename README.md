@@ -1,8 +1,8 @@
-# Mystery Mansion
+# Cluebound Chronicles
 
 A production-ready online murder mystery board game built with **Next.js 16**, **Socket.IO**, **PostgreSQL**, and **NextAuth**.
 
-![Mystery Mansion](https://img.shields.io/badge/Next.js-16.2.6-black)
+![Cluebound Chronicles](https://img.shields.io/badge/Next.js-16.2.6-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8-green)
 
@@ -123,7 +123,7 @@ npm run dev
 You'll see output like:
 
 ```
-> Mystery Mansion ready on http://localhost:3001
+> Cluebound Chronicles ready on http://localhost:3001
 > ngrok tunnel active
 > Public URL:  https://your-subdomain.ngrok-free.dev
 > Share this URL with friends to play online

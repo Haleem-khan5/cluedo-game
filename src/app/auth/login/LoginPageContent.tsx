@@ -93,7 +93,7 @@ export function LoginPageContent() {
                 type="email"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="detective@mansion.com"
+                placeholder="detective@clueboundchronicles.com"
                 required
               />
               <Input

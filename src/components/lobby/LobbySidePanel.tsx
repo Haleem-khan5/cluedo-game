@@ -56,7 +56,7 @@ export function LobbySidePanel() {
         </div>
 
         <h1 className="font-serif text-4xl xl:text-5xl text-cream leading-[1.05]">
-          Mystery Mansion
+          Cluebound Chronicles
         </h1>
         <p className="text-cream/55 mt-4 text-lg leading-relaxed">
           A murder. Six suspects. One detective sharp enough to solve it — that’s you.

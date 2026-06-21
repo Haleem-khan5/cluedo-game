@@ -6,7 +6,7 @@ import { X, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { onboardingTourSteps } from "@/lib/game/guidebookContent";
 
-const TOUR_STORAGE_KEY = "mystery-mansion-tour-completed";
+const TOUR_STORAGE_KEY = "cluebound-chronicles-tour-completed";
 
 interface OnboardingTourProps {
   /** Force show tour even if completed (for manual replay). */
